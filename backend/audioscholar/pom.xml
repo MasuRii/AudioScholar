@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.4.5</version>
+		<version>3.4.11</version>
 		<relativePath/>
 	</parent>
 	<groupId>edu.cit</groupId>
@@ -210,12 +210,10 @@
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-api</artifactId>
-			<version>2.23.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.logging.log4j</groupId>
 			<artifactId>log4j-core</artifactId>
-			<version>2.23.1</version>
 		</dependency>
 
 		<dependency>
@@ -254,6 +252,57 @@
 					<format>HTML</format>
 					<nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
 				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>com.diffplug.spotless</groupId>
+				<artifactId>spotless-maven-plugin</artifactId>
+				<version>2.46.1</version>
+				<configuration>
+					<java>
+						<!-- Import ordering -->
+						<importOrder>
+							<order>java,javax,org,com</order>
+						</importOrder>
+						
+						<!-- Remove unused imports -->
+						<removeUnusedImports/>
+						
+						<!-- Trim trailing whitespace -->
+						<trimTrailingWhitespace/>
+						
+						<!-- End files with newline -->
+						<endWithNewline/>
+						
+						<!-- Format with Eclipse JDT without complex configuration -->
+						<eclipse>
+							<version>4.27</version>
+						</eclipse>
+					</java>
+					
+					<!-- Force LF line endings -->
+					<lineEndings>UNIX</lineEndings>
+				</configuration>
+				
+				<executions>
+					<!-- Format during compile phase (before spring-boot:run) -->
+					<execution>
+						<id>format</id>
+						<goals>
+							<goal>apply</goal>
+						</goals>
+						<phase>compile</phase>
+					</execution>
+					
+					<!-- Validate during verify phase (for CI/CD) -->
+					<execution>
+						<id>check</id>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<phase>verify</phase>
+					</execution>
+				</executions>
 			</plugin>
 
 		</plugins>

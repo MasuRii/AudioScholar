@@ -8,7 +8,8 @@
             "mainClass": "edu.cit.audioscholar.AudioscholarApplication",
             "projectName": "audioscholar",
             "args": "",
-            "envFile": "${workspaceFolder}/.env"
+            "envFile": "${workspaceFolder}/.env",
+            "preLaunchTask": "spotless:apply (Pre-Launch Format)"
         }
     ]
 }
