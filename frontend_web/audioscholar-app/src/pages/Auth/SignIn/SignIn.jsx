@@ -317,10 +317,10 @@ const SignIn = () => {
                                                         <h1 className="text-3xl font-bold text-gray-800 mb-2">Sign In</h1>
                                                         <p className="text-gray-600 mb-6">Welcome back! Please enter your details or sign in with Google.</p>
 
-                                                        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                                                        <div className="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                                                                 <button
                                                                         onClick={handleGoogleSignIn}
-                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105"
                                                                         disabled={loading}
                                                                 >
                                                                         <FcGoogle className="w-5 h-5" />
@@ -328,7 +328,7 @@ const SignIn = () => {
                                                                 </button>
                                                                 <button
                                                                         onClick={handleGithubSignIn}
-                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105"
                                                                         disabled={loading}
                                                                 >
                                                                         <FaGithub className="w-5 h-5" />
@@ -336,7 +336,7 @@ const SignIn = () => {
                                                                 </button>
                                                         </div>
 
-                                                        <form className="space-y-4" onSubmit={handleSubmit}>
+                                                        <form className="space-y-4 animate-fade-in-up" style={{ animationDelay: '200ms' }} onSubmit={handleSubmit}>
                                                                 <div>
                                                                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                                                                         <input
@@ -389,7 +389,7 @@ const SignIn = () => {
 
                                                                 <button
                                                                         type="submit"
-                                                                        className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium transition ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b]'}`}
+                                                                        className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium transition ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b]'} transform hover:scale-105`}
                                                                         disabled={loading}
                                                                 >
                                                                         {loading ? 'Signing In...' : 'Log In with Email'}
