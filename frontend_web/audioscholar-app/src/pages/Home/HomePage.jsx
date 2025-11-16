@@ -106,7 +106,7 @@ export const Header = () => {
 
 const HeroSection = () => {
     return (
-        <section className="py-20 bg-gradient-to-r from-blue-50 to-teal-50">
+        <section className="py-20 bg-gradient-to-r from-blue-50 to-teal-50 animate-fade-in-up">
             <div className="container mx-auto px-4 text-center">
                 <h1 className="font-montserrat font-bold text-4xl md:text-5xl leading-tight tracking-normal text-gray-800 mb-4">
                     Stop Taking Notes, Start <span className="text-[#1A365D]">Actively Listening</span>.
@@ -115,7 +115,7 @@ const HeroSection = () => {
                     Traditional note-taking is inefficient. AudioScholar records lectures and uses AI to generate smart summaries,
                     so you can focus on understanding in class and get organized study materials automatically.
                 </p>
-                <Link to="/signup" className="bg-[#2D8A8A] hover:bg-teal-700 text-white font-inter font-medium text-base leading-5 tracking-tight py-3 px-8 rounded-md transition-colors shadow-md">
+                <Link to="/signup" className="bg-[#2D8A8A] hover:bg-teal-700 text-white font-inter font-medium text-base leading-5 tracking-tight py-3 px-8 rounded-md transition-colors shadow-md transform hover:scale-105">
                     Get Started for Free
                 </Link>
             </div>
@@ -160,10 +160,10 @@ const Features = () => {
     return (
         <section className="py-16 bg-teal-50">
             <div className="container mx-auto px-4">
-                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-[#1A365D] mb-12">How AudioScholar Makes Learning Efficient</h2>
+                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-[#1A365D] mb-12 animate-fade-in-up">How AudioScholar Makes Learning Efficient</h2>
                 <div className="grid md:grid-cols-3 gap-8">
                     {features.map((feature, index) => (
-                        <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow">
+                        <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow transform hover:scale-105 animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
                             <div className="flex items-center mb-4">
                                 <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mr-4">
                                     {feature.icon}
@@ -399,4 +399,4 @@ const HomePage = () => {
     );
 };
 
-export default HomePage; 
+export default HomePage;  
