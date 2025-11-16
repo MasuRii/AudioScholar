@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://localhost:3001/';
+export const API_BASE_URL = 'http://localhost:8080/';
 
 /**
  * Sends the Firebase ID token obtained from frontend Firebase authentication
@@ -95,16 +95,17 @@ export const signUp = async (userData) => {
             body: JSON.stringify(userData),
         });
 
-        const errorData = await response.json();
+        const responseData = await response.json();
 
         if (!response.ok) {
-            const error = new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            console.error('Backend sign up error response:', responseData);
+            const error = new Error(responseData.message || `HTTP error! status: ${response.status}`);
             error.status = response.status;
-            error.data = errorData;
+            error.data = responseData;
             throw error;
         }
 
-        return errorData;
+        return responseData;
 
     } catch (error) {
         console.error("Error during sign up API call:", error);

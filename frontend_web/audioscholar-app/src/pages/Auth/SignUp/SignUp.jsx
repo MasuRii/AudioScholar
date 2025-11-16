@@ -2,7 +2,6 @@ import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from '
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
-import { signUp } from '../../../services/authService';
 import { Footer, Header } from '../../Home/HomePage';
 
 const SignUp = () => {
@@ -55,21 +54,12 @@ const SignUp = () => {
       // Step 2: Send verification email
       await sendEmailVerification(user);
 
-      // Step 3: Register user in your backend
-      const userData = {
-        firebaseUID: user.uid,
-        firstName: firstName,
-        lastName: lastName,
-        email: email,
-      };
-      
-      await signUp(userData);
-
       setSuccessMessage('Sign up successful! A verification email has been sent to your address. Please verify your email before signing in.');
       setFirstName('');
       setLastName('');
       setEmail('');
       setPassword('');
+      navigate('/verify-email-code', { state: { email: email } });
 
     } catch (err) {
       console.error('Sign up error:', err);
