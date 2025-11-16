@@ -24,6 +24,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -570,7 +571,7 @@ public class AuthController {
 
 		try {
 
-			firebaseService.updateUserPassword(userId, request.getNewPassword());
+			userService.changePassword(userId, request.getNewPassword());
 			log.info("Password successfully changed for user ID: {}", userId);
 			return ResponseEntity.ok(new AuthResponse(true, "Password changed successfully."));
 		} catch (FirebaseAuthException e) {
@@ -601,6 +602,29 @@ public class AuthController {
 			log.error("Unexpected error changing password for user ID {}: {}", userId, e.getMessage(), e);
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
 					.body(new AuthResponse(false, "An unexpected error occurred while changing the password."));
+		}
+	}
+
+	@GetMapping("/verification-status")
+	public ResponseEntity<?> getVerificationStatus(Authentication authentication) {
+		String userId = getUserIdFromAuthentication(authentication);
+		log.info("Received request to check email verification status for user ID: {}", userId);
+
+		try {
+			boolean isEmailVerified = userService.isEmailVerified(userId);
+			log.info("Email verification status for user ID {}: {}", userId, isEmailVerified);
+
+			// Return a simple map with verification status
+			return ResponseEntity.ok(Map.of("verified", isEmailVerified, "userId", userId));
+		} catch (FirestoreInteractionException e) {
+			log.error("Failed to check email verification status for user ID {}: {}", userId, e.getMessage(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+					.body(new AuthResponse(false, "Failed to retrieve email verification status."));
+		} catch (Exception e) {
+			log.error("Unexpected error checking email verification status for user ID {}: {}", userId, e.getMessage(),
+					e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+					new AuthResponse(false, "An unexpected error occurred while checking email verification status."));
 		}
 	}
 

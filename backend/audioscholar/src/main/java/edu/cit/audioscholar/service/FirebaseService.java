@@ -271,6 +271,23 @@ public class FirebaseService {
 		}
 	}
 
+	public boolean isEmailVerified(String uid) throws FirebaseAuthException {
+		if (!StringUtils.hasText(uid)) {
+			log.error("Cannot check email verification status for blank UID.");
+			throw new IllegalArgumentException("User ID (UID) cannot be blank.");
+		}
+		log.debug("Checking email verification status for Firebase user UID: {}", uid);
+		try {
+			UserRecord userRecord = getFirebaseAuth().getUser(uid);
+			boolean isVerified = userRecord.isEmailVerified();
+			log.info("Email verification status for UID {}: {}", uid, isVerified);
+			return isVerified;
+		} catch (FirebaseAuthException e) {
+			log.error("Failed to check email verification status for Firebase user UID {}: {}", uid, e.getMessage());
+			throw e;
+		}
+	}
+
 	public String saveData(String collection, String document, Object dataPojo) {
 		if (dataPojo == null) {
 			log.error("Attempted to save null data object to {}/{}", collection, document);

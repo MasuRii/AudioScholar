@@ -524,4 +524,49 @@ public class UserService {
 		log.info("Saving updated role for user ID: {}", userId);
 		return updateUser(existingUser);
 	}
+
+	public boolean isEmailVerified(String userId) throws FirestoreInteractionException {
+		if (!StringUtils.hasText(userId)) {
+			log.error("Cannot check email verification status for blank user ID.");
+			throw new IllegalArgumentException("User ID cannot be blank.");
+		}
+		log.debug("Checking email verification status for user ID: {}", userId);
+		try {
+			return firebaseService.isEmailVerified(userId);
+		} catch (FirebaseAuthException e) {
+			log.error("Failed to check email verification status for user ID {}: {}", userId, e.getMessage());
+			throw new FirestoreInteractionException("Failed to check email verification status for user: " + userId, e);
+		}
+	}
+
+	/**
+	 * Changes the password for the specified user. This method delegates to
+	 * FirebaseService for password update and ensures centralized user management
+	 * through UserService.
+	 *
+	 * @param userId
+	 *            the unique identifier of the user
+	 * @param newPassword
+	 *            the new password to set
+	 * @throws FirebaseAuthException
+	 *             if the password change fails due to Firebase authentication
+	 *             errors
+	 * @throws IllegalArgumentException
+	 *             if the userId is blank or newPassword is invalid
+	 */
+	public void changePassword(String userId, String newPassword)
+			throws FirebaseAuthException, IllegalArgumentException {
+		if (!StringUtils.hasText(userId)) {
+			log.error("Cannot change password for user with blank ID.");
+			throw new IllegalArgumentException("User ID cannot be blank.");
+		}
+		if (!StringUtils.hasText(newPassword)) {
+			log.error("Cannot change password for user {} with blank new password.", userId);
+			throw new IllegalArgumentException("New password cannot be blank.");
+		}
+
+		log.info("Changing password for user ID: {}", userId);
+		firebaseService.updateUserPassword(userId, newPassword);
+		log.info("Password successfully changed for user ID: {}", userId);
+	}
 }
