@@ -4,13 +4,17 @@
         {
             "label": "spotless:apply (Pre-Launch Format)",
             "type": "shell",
-            "command": "mvn spotless:apply",
+            "command": "${workspaceFolder}\\mvnw.cmd",
+            "args": ["spotless:apply"],
             "group": "build",
             "presentation": {
                 "reveal": "silent",
                 "panel": "dedicated"
             },
-            "problemMatcher": []
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
         }
     ]
 }
