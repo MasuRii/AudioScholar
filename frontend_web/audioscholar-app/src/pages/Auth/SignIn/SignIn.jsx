@@ -1,8 +1,8 @@
-import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import React, { useState } from 'react';
 import { FaGithub } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
-import { FiMic, FiCheckCircle, FiYoutube, FiUpload, FiCloud, FiBriefcase } from 'react-icons/fi';
+import { FiBriefcase, FiCheckCircle, FiCloud, FiMic, FiUpload, FiYoutube } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
 import { verifyFirebaseTokenWithBackend, verifyGoogleTokenWithBackend } from '../../../services/authService';
@@ -13,6 +13,7 @@ const SignIn = () => {
         const [password, setPassword] = useState('');
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState(null);
+        const [showResendVerification, setShowResendVerification] = useState(false);
         const navigate = useNavigate();
         const auth = getAuth(firebaseApp);
 
@@ -46,6 +47,7 @@ const SignIn = () => {
         const handleSubmit = async (e) => {
                 e.preventDefault();
                 setError(null);
+                setShowResendVerification(false);
 
                 if (!email || !password) {
                         setError('Please enter both email and password.');
@@ -58,6 +60,13 @@ const SignIn = () => {
                         const userCredential = await signInWithEmailAndPassword(auth, email, password);
                         const user = userCredential.user;
                         console.log('Firebase email/password sign-in successful for user:', user.uid);
+
+                        if (!user.emailVerified) {
+                                setError('Please verify your email before signing in.');
+                                setShowResendVerification(true);
+                                setLoading(false);
+                                return;
+                        }
 
                         const idToken = await user.getIdToken();
                         console.log('Obtained Firebase ID Token.');
@@ -82,6 +91,19 @@ const SignIn = () => {
                                 }
                         }
                         setError(errorMessage);
+                        setLoading(false);
+                }
+        };
+
+        const handleResendVerification = async () => {
+                setLoading(true);
+                try {
+                        await sendEmailVerification(auth.currentUser);
+                        setError('A new verification email has been sent. Please check your inbox.');
+                } catch (err) {
+                        console.error('Error resending verification email:', err);
+                        setError('Failed to resend verification email. Please try again later.');
+                } finally {
                         setLoading(false);
                 }
         };
@@ -255,29 +277,42 @@ const SignIn = () => {
                                                                                                 </div>
                                                                                         );
                                                                                 })()}
-                                                                        </div>
-
-                                                                        {/* Navigation - below the cards */}
-                                                                        {signInFeatures.length > 1 && ( // Only show nav if more than one feature to cycle through
-                                                                                <div className="mt-8 w-full max-w-sm"> {/* Increased mt from mt-6 to mt-8 */}
-                                                                                        <div className="flex items-center justify-center space-x-2.5 mb-4">
-                                                                                                {signInFeatures.map((_, index) => (
-                                                                                                        <button
-                                                                                                                key={index}
-                                                                                                                onClick={() => setCurrentFeatureIndex(index)}
-                                                                                                                className={`w-2 h-2 rounded-full transition-all duration-300 ${currentFeatureIndex === index ? 'bg-white ring-2 ring-offset-2 ring-offset-[#2D8A8A] ring-white scale-110' : 'bg-gray-400 bg-opacity-40 hover:bg-opacity-60'}`}
-                                                                                                                aria-label={`Go to feature ${index + 1}`}
-                                                                                                        />
-                                                                                                ))}
-                                                                                        </div>
-                                                                                </div>
-                                                                        )}
-                                                                </div>
-                                                        )}
-                                                        {/* Fallback or Spacer if no features, or to help with justify-between if used */}
-                                                        {signInFeatures.length === 0 && <div className="flex-grow"></div>} {/* Adjusted condition from !displayedFeature */}
-                                                </div>
-
+                                                                                                                                                                                </div>
+                                                                        
+                                                                                                                                                {/* Navigation - below the cards */}
+                                                                                                                                                {signInFeatures.length > 1 && ( // Only show nav if more than one feature to cycle through
+                                                                                                                                                        <div className="mt-8 w-full max-w-sm"> {/* Increased mt from mt-6 to mt-8 */}
+                                                                                                                                                                <div className="flex items-center justify-center space-x-2.5 mb-4">
+                                                                                                                                                                        {signInFeatures.map((_, index) => (
+                                                                                                                                                                                <button
+                                                                                                                                                                                        key={index}
+                                                                                                                                                                                        onClick={() => setCurrentFeatureIndex(index)}
+                                                                                                                                                                                        className={`w-2 h-2 rounded-full transition-all duration-300 ${currentFeatureIndex === index ? 'bg-white ring-2 ring-offset-2 ring-offset-[#2D8A8A] ring-white scale-110' : 'bg-gray-400 bg-opacity-40 hover:bg-opacity-60'}`}
+                                                                                                                                                                                        aria-label={`Go to feature ${index + 1}`}
+                                                                                                                                                                                />
+                                                                                                                                                                        ))}
+                                                                                                                                                                </div>
+                                                                                                                                                                <div className="flex justify-between">
+                                                                                                                                                                        <button
+                                                                                                                                                                                onClick={handlePrevFeature}
+                                                                                                                                                                                className="px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition"
+                                                                                                                                                                        >
+                                                                                                                                                                                Previous
+                                                                                                                                                                        </button>
+                                                                                                                                                                        <button
+                                                                                                                                                                                onClick={handleNextFeature}
+                                                                                                                                                                                className="px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition"
+                                                                                                                                                                        >
+                                                                                                                                                                                Next
+                                                                                                                                                                        </button>
+                                                                                                                                                                </div>
+                                                                                                                                                        </div>
+                                                                                                                                                )}
+                                                                                                                                        </div>
+                                                                                                                                )}
+                                                                                                                                {/* Fallback or Spacer if no features, or to help with justify-between if used */}
+                                                                                                                                {signInFeatures.length === 0 && <div className="flex-grow"></div>} {/* Adjusted condition from !displayedFeature */}
+                                                                                                                        </div>
                                                 <div className="bg-white p-8 md:p-10">
                                                         <h1 className="text-3xl font-bold text-gray-800 mb-2">Sign In</h1>
                                                         <p className="text-gray-600 mb-6">Welcome back! Please enter your details or sign in with Google.</p>
@@ -332,6 +367,16 @@ const SignIn = () => {
 
                                                                 {error && (
                                                                         <p className="text-red-500 text-sm mt-2 text-center">{error}</p>
+                                                                )}
+
+                                                                {showResendVerification && (
+                                                                        <button
+                                                                                onClick={handleResendVerification}
+                                                                                className="w-full bg-yellow-500 text-white py-2 px-4 rounded-lg font-medium transition hover:bg-yellow-600"
+                                                                                disabled={loading}
+                                                                        >
+                                                                                {loading ? 'Sending...' : 'Resend Verification Email'}
+                                                                        </button>
                                                                 )}
 
                                                                 <div className="flex items-center justify-between text-sm">
