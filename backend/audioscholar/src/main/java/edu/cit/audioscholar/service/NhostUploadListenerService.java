@@ -14,7 +14,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.lang.Nullable;
@@ -39,6 +38,7 @@ public class NhostUploadListenerService {
 	private final FirebaseService firebaseService;
 	private final NhostStorageService nhostStorageService;
 	private final RabbitTemplate rabbitTemplate;
+	@SuppressWarnings("unused")
 	private final ObjectMapper objectMapper;
 	private final Map<String, Lock> metadataLocks = new HashMap<>();
 
@@ -184,33 +184,6 @@ public class NhostUploadListenerService {
 		}
 	}
 
-	private boolean triggerParallelProcessing(String metadataId, boolean pptxExpected) {
-		String userId = null;
-		AudioMetadata metadata = firebaseService.getAudioMetadataById(metadataId);
-		if (metadata == null) {
-			log.error("Cannot trigger processing, metadata {} not found.", metadataId);
-			return false;
-		}
-		userId = metadata.getUserId();
-
-		boolean transcriptionSent = false;
-		boolean pptxConversionSent = false;
-
-		AudioProcessingMessage transcriptionMessage = new AudioProcessingMessage(metadataId, userId, metadataId);
-		sendMessage(metadataId, RabbitMQConfig.PROCESSING_EXCHANGE_NAME, RabbitMQConfig.TRANSCRIPTION_ROUTING_KEY,
-				transcriptionMessage, "transcription queue");
-		transcriptionSent = true;
-
-		if (pptxExpected) {
-			AudioProcessingMessage pptxMessage = new AudioProcessingMessage(metadataId, userId, metadataId);
-			sendMessage(metadataId, RabbitMQConfig.PROCESSING_EXCHANGE_NAME, RabbitMQConfig.PPTX_CONVERSION_ROUTING_KEY,
-					pptxMessage, "PPTX conversion queue");
-			pptxConversionSent = true;
-		}
-
-		return transcriptionSent && (!pptxExpected || pptxConversionSent);
-	}
-
 	private void updateStatus(String metadataId, @Nullable String userId, ProcessingStatus status,
 			@Nullable String reason) {
 		try {
@@ -233,19 +206,6 @@ public class NhostUploadListenerService {
 		} catch (FirestoreInteractionException e) {
 			log.error("[{}] CRITICAL: Failed to update metadata status to {}. Error: {}", metadataId, status,
 					e.getMessage(), e);
-		}
-	}
-
-	private void sendMessage(String metadataId, String exchange, String routingKey, Object messagePayload,
-			String messageDescription) {
-		try {
-			rabbitTemplate.convertAndSend(exchange, routingKey, messagePayload);
-			log.info("Sent message ({}) for metadataId {} to exchange '{}' with key '{}'", messageDescription,
-					metadataId, exchange, routingKey);
-		} catch (AmqpException e) {
-			log.error("Failed to send message ({}) for metadataId {} to exchange '{}' key '{}': {}", messageDescription,
-					metadataId, exchange, routingKey, e.getMessage(), e);
-			throw e;
 		}
 	}
 

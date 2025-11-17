@@ -185,7 +185,7 @@ public class AuthController {
 				}
 			}
 
-			if ("google.com".equals(provider) && claims.containsKey("email")) {
+			if (claims != null && "google.com".equals(provider) && claims.containsKey("email")) {
 				email = (String) claims.get("email");
 				log.info("Extracted email from Google provider token claim: {}", email);
 			}

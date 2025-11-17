@@ -6,7 +6,6 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +35,6 @@ public class UserProfileController {
 			MediaType.IMAGE_PNG_VALUE, MediaType.IMAGE_GIF_VALUE);
 	private static final long MAX_AVATAR_SIZE_BYTES = 5 * 1024 * 1024;
 
-	@Autowired
 	public UserProfileController(UserService userService) {
 		this.userService = userService;
 	}

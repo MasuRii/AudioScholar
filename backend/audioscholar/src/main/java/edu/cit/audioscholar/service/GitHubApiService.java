@@ -9,7 +9,6 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.core.ParameterizedTypeReference;
@@ -34,7 +33,6 @@ public class GitHubApiService {
 	@Value("${github.api.url.emails:https://api.github.com/user/emails}")
 	private String githubEmailsUrl;
 
-	@Autowired
 	public GitHubApiService(WebClient.Builder webClientBuilder) {
 		this.webClient = webClientBuilder.baseUrl("https://api.github.com").build();
 	}

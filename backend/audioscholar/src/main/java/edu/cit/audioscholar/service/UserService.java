@@ -15,7 +15,6 @@ import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
@@ -46,7 +45,6 @@ public class UserService {
 	private final NhostStorageService nhostStorageService;
 	private final Path tempFileDir;
 
-	@Autowired
 	public UserService(FirebaseService firebaseService, NhostStorageService nhostStorageService,
 			@Value("${app.temp-file-dir}") String tempFileDirStr) {
 		this.firebaseService = firebaseService;
@@ -138,6 +136,7 @@ public class UserService {
 				return null;
 			}
 			User user = User.fromMap(data);
+			@SuppressWarnings("unchecked")
 			List<String> tokens = (List<String>) data.get("fcmTokens");
 			user.setFcmTokens(tokens != null ? List.copyOf(tokens) : List.of());
 			return user;
@@ -479,6 +478,7 @@ public class UserService {
 		return tokens;
 	}
 
+	@SuppressWarnings("null")
 	public void removeFcmTokens(String userId, List<String> tokensToRemove) {
 		if (userId == null || userId.isBlank() || tokensToRemove == null || tokensToRemove.isEmpty()) {
 			log.warn("Attempted to remove FCM tokens with invalid userId or empty token list. userId={}, tokens={}",
@@ -488,8 +488,9 @@ public class UserService {
 
 		try {
 			log.info("Attempting to remove {} stale FCM token(s) for user: {}", tokensToRemove.size(), userId);
+			Object[] tokensArray = (Object[]) tokensToRemove.toArray();
 			firebaseService.updateDataWithMap(COLLECTION_NAME, userId,
-					Map.of("fcmTokens", FieldValue.arrayRemove(tokensToRemove.toArray())));
+					Map.of("fcmTokens", FieldValue.arrayRemove(tokensArray)));
 			log.info("Successfully removed {} stale FCM token(s) for user: {}", tokensToRemove.size(), userId);
 		} catch (FirestoreInteractionException e) {
 			log.error("Failed to remove stale FCM tokens for user {}: {}", userId, e.getMessage(), e);

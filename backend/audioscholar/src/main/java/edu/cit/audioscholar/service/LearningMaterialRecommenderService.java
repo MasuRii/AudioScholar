@@ -515,6 +515,7 @@ public class LearningMaterialRecommenderService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public boolean deleteRecommendation(String recommendationId) {
 		if (!StringUtils.hasText(recommendationId)) {
 			log.warn("Attempted to delete recommendation with null or empty ID.");

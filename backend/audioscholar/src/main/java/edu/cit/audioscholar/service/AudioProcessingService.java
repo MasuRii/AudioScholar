@@ -53,7 +53,9 @@ public class AudioProcessingService {
 	private final RecordingService recordingService;
 	private final String maxFileSizeValue;
 	private final Path tempFileDir;
+	@SuppressWarnings("unused")
 	private final CacheManager cacheManager;
+	@SuppressWarnings("unused")
 	private final ObjectMapper objectMapper;
 
 	public AudioProcessingService(FirebaseService firebaseService, RabbitTemplate rabbitTemplate,
@@ -154,7 +156,9 @@ public class AudioProcessingService {
 				initialMetadata.setOriginalPptxFileName(originalPptxFilename);
 				initialMetadata.setPptxFileSize(powerpointFile.getSize());
 				initialMetadata.setPptxContentType(originalPptxContentType);
-				initialMetadata.setTempPptxFilePath(tempPptxPath.toAbsolutePath().toString());
+				if (tempPptxPath != null) {
+					initialMetadata.setTempPptxFilePath(tempPptxPath.toAbsolutePath().toString());
+				}
 				initialMetadata.setAudioOnly(false);
 			} else {
 				initialMetadata.setAudioOnly(true);
@@ -618,15 +622,4 @@ public class AudioProcessingService {
 	private void invalidateUserCache(String userId) {
 	}
 
-	private void cleanupTempFile(Path tempPath) {
-		if (tempPath != null) {
-			try {
-				Files.deleteIfExists(tempPath);
-				log.info("Cleaned up temporary file due to pre-queueing error: {}", tempPath.getFileName());
-			} catch (IOException ex) {
-				log.warn("Failed to clean up temporary file {} after error: {}", tempPath.getFileName(),
-						ex.getMessage());
-			}
-		}
-	}
 }

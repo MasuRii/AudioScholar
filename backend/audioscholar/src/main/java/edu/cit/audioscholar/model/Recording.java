@@ -140,7 +140,6 @@ public class Recording {
 		return map;
 	}
 
-	@SuppressWarnings("unchecked")
 	public static Recording fromMap(Map<String, Object> map) {
 		if (map == null) {
 			return null;
@@ -198,7 +197,6 @@ public class Recording {
 		return recording;
 	}
 
-	@SuppressWarnings("unchecked")
 	public static Recording fromMap(String documentId, Map<String, Object> map) {
 		if (map == null) {
 			return null;

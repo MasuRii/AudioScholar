@@ -125,7 +125,6 @@ public class Summary {
 
 		Object glossaryObj = map.get("glossary");
 		if (glossaryObj instanceof List) {
-			@SuppressWarnings("unchecked")
 			List<?> rawGlossaryList = (List<?>) glossaryObj;
 			List<Map<String, String>> glossaryList = new ArrayList<>();
 			for (Object item : rawGlossaryList) {

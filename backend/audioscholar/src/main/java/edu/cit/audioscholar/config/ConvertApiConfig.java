@@ -19,11 +19,20 @@ public class ConvertApiConfig {
 
 	@PostConstruct
 	public void init() {
-		if (convertApiSecret == null || convertApiSecret.isBlank()) {
+		// Direct access to environment variable since @Value annotation is not
+		// resolving it
+		String secretFromEnv = System.getenv("CONVERTAPI_SECRET");
+
+		logger.info("ConvertAPI secret from @Value: '{}'", convertApiSecret);
+		logger.info("ConvertAPI secret from System.getenv: '{}'", secretFromEnv);
+
+		if ((convertApiSecret == null || convertApiSecret.isBlank())
+				&& (secretFromEnv == null || secretFromEnv.isBlank())) {
 			logger.warn("ConvertAPI secret is not configured. PPTX-to-PDF conversion will not work.");
 		} else {
+			String secretToUse = secretFromEnv != null && !secretFromEnv.isBlank() ? secretFromEnv : convertApiSecret;
 			logger.info("Initializing ConvertAPI with provided secret");
-			Config.setDefaultApiCredentials(convertApiSecret);
+			Config.setDefaultApiCredentials(secretToUse);
 		}
 	}
 }

@@ -30,7 +30,16 @@ public class ConvertApiService {
 			Param fileParam = new Param("File", pptxUrl);
 			Param storeFileParam = new Param("StoreFile", "true");
 
-			String format = pptxUrl.toLowerCase().endsWith(".pptx") ? "pptx" : "ppt";
+			String lowerCaseUrl = pptxUrl.toLowerCase();
+			String format;
+			if (lowerCaseUrl.endsWith(".pptx")) {
+				format = "pptx";
+			} else if (lowerCaseUrl.endsWith(".ppt")) {
+				format = "ppt";
+			} else {
+				// Default to pptx for safety if extension is missing/unknown
+				format = "pptx";
+			}
 
 			CompletableFuture<ConversionResult> future = ConvertApi.convert(format, "pdf", fileParam, storeFileParam);
 

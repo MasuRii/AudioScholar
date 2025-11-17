@@ -595,11 +595,6 @@ public class SummarizationListenerService {
 		return summary;
 	}
 
-	private Summary createSummary(String metadataId, String userId, String summaryText, List<String> keyPoints,
-			List<String> topics, String pdfContextUrl) {
-		return createSummary(metadataId, userId, summaryText, keyPoints, topics, pdfContextUrl, null);
-	}
-
 	private void updateRecordingWithSummaryId(String recordingId, String summaryId, String metadataId) {
 		try {
 			log.info("[{}] Fetching recording {} to update with summaryId {}...", metadataId, recordingId, summaryId);
@@ -761,32 +756,37 @@ public class SummarizationListenerService {
 	private void downloadFileFromUrl(String fileUrl, Path targetPath) throws IOException {
 		log.info("Downloading file from URL: {} to local path: {}", fileUrl, targetPath);
 
-		java.net.URL url = new java.net.URL(fileUrl);
-		java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
-		connection.setRequestMethod("GET");
-		connection.setConnectTimeout(30000);
-		connection.setReadTimeout(300000);
+		try {
+			java.net.URL url = new java.net.URI(fileUrl).toURL();
+			java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+			connection.setRequestMethod("GET");
+			connection.setConnectTimeout(30000);
+			connection.setReadTimeout(300000);
 
-		int responseCode = connection.getResponseCode();
-		if (responseCode != java.net.HttpURLConnection.HTTP_OK) {
-			throw new IOException("HTTP error code: " + responseCode);
-		}
-
-		try (java.io.InputStream in = connection.getInputStream();
-				java.io.OutputStream out = Files.newOutputStream(targetPath)) {
-
-			byte[] buffer = new byte[8192];
-			int bytesRead;
-			long totalBytesRead = 0;
-			long startTime = System.currentTimeMillis();
-
-			while ((bytesRead = in.read(buffer)) != -1) {
-				out.write(buffer, 0, bytesRead);
-				totalBytesRead += bytesRead;
+			int responseCode = connection.getResponseCode();
+			if (responseCode != java.net.HttpURLConnection.HTTP_OK) {
+				throw new IOException("HTTP error code: " + responseCode);
 			}
 
-			long endTime = System.currentTimeMillis();
-			log.info("Download completed. Total bytes: {}, Time taken: {} ms", totalBytesRead, (endTime - startTime));
+			try (java.io.InputStream in = connection.getInputStream();
+					java.io.OutputStream out = Files.newOutputStream(targetPath)) {
+
+				byte[] buffer = new byte[8192];
+				int bytesRead;
+				long totalBytesRead = 0;
+				long startTime = System.currentTimeMillis();
+
+				while ((bytesRead = in.read(buffer)) != -1) {
+					out.write(buffer, 0, bytesRead);
+					totalBytesRead += bytesRead;
+				}
+
+				long endTime = System.currentTimeMillis();
+				log.info("Download completed. Total bytes: {}, Time taken: {} ms", totalBytesRead,
+						(endTime - startTime));
+			}
+		} catch (java.net.URISyntaxException e) {
+			throw new IOException("Invalid URL format: " + fileUrl, e);
 		}
 	}
 }

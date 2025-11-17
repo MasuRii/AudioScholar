@@ -38,8 +38,6 @@ public class YouTubeAPIClient {
 
 	private static final List<String> ENGLISH_REGIONS = Arrays.asList("US", "GB", "CA", "AU", "NZ", "IE", "SG");
 
-	private static final String DEFAULT_REGION = "US";
-
 	private YouTube youtubeService;
 
 	@PostConstruct

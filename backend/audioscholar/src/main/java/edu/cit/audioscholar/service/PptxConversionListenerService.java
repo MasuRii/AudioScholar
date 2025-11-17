@@ -27,6 +27,7 @@ public class PptxConversionListenerService {
 	private final NhostStorageService nhostStorageService;
 	private final ConvertApiService convertApiService;
 	private final RabbitTemplate rabbitTemplate;
+	@SuppressWarnings("unused")
 	private final ObjectMapper objectMapper;
 
 	public PptxConversionListenerService(FirebaseService firebaseService, NhostStorageService nhostStorageService,
@@ -175,18 +176,5 @@ public class PptxConversionListenerService {
 		} catch (Exception e) {
 			logger.error("Failed to update status for metadata ID: {}", metadataId, e);
 		}
-	}
-
-	private String generatePdfFileName(String originalPptxFileName) {
-		if (originalPptxFileName == null || originalPptxFileName.isBlank()) {
-			return "converted_presentation.pdf";
-		}
-
-		String baseName = originalPptxFileName;
-		if (baseName.toLowerCase().endsWith(".pptx") || baseName.toLowerCase().endsWith(".ppt")) {
-			baseName = baseName.substring(0, baseName.lastIndexOf('.'));
-		}
-
-		return baseName + ".pdf";
 	}
 }

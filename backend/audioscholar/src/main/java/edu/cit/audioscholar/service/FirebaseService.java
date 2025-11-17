@@ -157,6 +157,7 @@ public class FirebaseService {
 		return firebaseApp;
 	}
 
+	@SuppressWarnings("null")
 	public AudioMetadata getAudioMetadataByRecordingId(String recordingId) throws FirestoreInteractionException {
 		if (!StringUtils.hasText(recordingId)) {
 			log.warn("Attempted to get AudioMetadata with blank recordingId.");
@@ -288,6 +289,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public String saveData(String collection, String document, Object dataPojo) {
 		if (dataPojo == null) {
 			log.error("Attempted to save null data object to {}/{}", collection, document);
@@ -312,6 +314,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public Map<String, Object> getData(String collection, String document) {
 		try {
 			DocumentReference docRef = getFirestore().collection(collection).document(document);
@@ -331,6 +334,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public String updateData(String collection, String document, Object dataPojo) {
 		if (dataPojo == null) {
 			log.error("Attempted to update with null data object for {}/{}", collection, document);
@@ -356,6 +360,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public String updateDataWithMap(String collection, String document, Map<String, Object> data) {
 		if (data == null || data.isEmpty()) {
 			log.warn("Attempted to update data with null or empty map for {}/{}", collection, document);
@@ -374,6 +379,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public String deleteData(String collection, String document) {
 		try {
 			Firestore firestore = getFirestore();
@@ -388,6 +394,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public List<Map<String, Object>> queryCollection(String collection, String field, Object value) {
 		try {
 			Firestore firestore = getFirestore();
@@ -407,6 +414,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public void updateAudioMetadataStatus(String metadataId, ProcessingStatus status)
 			throws FirestoreInteractionException {
 		if (!StringUtils.hasText(metadataId) || status == null) {
@@ -431,6 +439,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public List<AudioMetadata> getAllAudioMetadata() {
 		log.warn(
 				"Executing getAllAudioMetadata - Fetching all documents from {}. Consider pagination for large datasets.",
@@ -461,6 +470,7 @@ public class FirebaseService {
 	}
 
 	@Cacheable(value = CACHE_METADATA_BY_USER, key = "#userId", condition = "#userId != null")
+	@SuppressWarnings("null")
 	public List<AudioMetadata> getAudioMetadataByUserId(String userId, int pageSize, String lastDocumentId) {
 		if (!StringUtils.hasText(userId)) {
 			log.warn("Attempted to get AudioMetadata with blank userId.");
@@ -478,7 +488,8 @@ public class FirebaseService {
 			if (StringUtils.hasText(lastDocumentId)) {
 				DocumentSnapshot lastSnapshot = null;
 				try {
-					ApiFuture<DocumentSnapshot> lastSnapshotFuture = colRef.document(lastDocumentId).get();
+					ApiFuture<DocumentSnapshot> lastSnapshotFuture = colRef
+							.document(Objects.requireNonNull(lastDocumentId)).get();
 					lastSnapshot = lastSnapshotFuture.get();
 				} catch (ExecutionException | InterruptedException e) {
 					Thread.currentThread().interrupt();
@@ -548,6 +559,7 @@ public class FirebaseService {
 	}
 
 	@Cacheable(value = CACHE_METADATA_BY_ID, key = "#metadataId", unless = "#result == null")
+	@SuppressWarnings("null")
 	public AudioMetadata getAudioMetadataById(String metadataId) {
 		if (!StringUtils.hasText(metadataId)) {
 			log.warn("Attempted to get AudioMetadata with blank ID.");
@@ -582,6 +594,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public void saveLearningRecommendations(List<LearningRecommendation> recommendations)
 			throws FirestoreInteractionException {
 		if (recommendations == null || recommendations.isEmpty()) {
@@ -600,7 +613,7 @@ public class FirebaseService {
 
 			for (LearningRecommendation recommendation : recommendations) {
 				DocumentReference docRef = colRef.document();
-				batch.set(docRef, recommendation);
+				batch.set(docRef, Objects.requireNonNull(recommendation));
 			}
 
 			ApiFuture<List<WriteResult>> future = batch.commit();
@@ -619,6 +632,7 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
 	public List<LearningRecommendation> getLearningRecommendationsByRecordingId(String recordingId)
 			throws FirestoreInteractionException {
 		if (!StringUtils.hasText(recordingId)) {
@@ -904,6 +918,7 @@ public class FirebaseService {
 	}
 
 	@CacheEvict(value = CACHE_METADATA_BY_ID, key = "#metadataId", condition = "#metadataId != null")
+	@SuppressWarnings("null")
 	public void updateAudioMetadataStatusAndReason(String metadataId, @Nullable String userId, ProcessingStatus status,
 			String reason) throws ExecutionException, InterruptedException {
 		if (metadataId == null || status == null) {
