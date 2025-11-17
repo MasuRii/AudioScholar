@@ -555,16 +555,16 @@ class RecordingDetailsViewModel @Inject constructor(
                 Log.d("DetailsViewModel", "Creating temp file for PowerPoint: ${powerpointFile.absolutePath}")
                 
                 application.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    powerpointFile.outputStream().use { outputStream ->
+                    powerpointFile?.outputStream()?.use { outputStream ->
                         inputStream.copyTo(outputStream)
                     }
                 }
                 
-                if (!powerpointFile.exists() || powerpointFile.length() == 0L) {
+                if (powerpointFile?.exists() != true || powerpointFile?.length() == 0L) {
                     Log.e("DetailsViewModel", "Failed to create temporary PowerPoint file or file is empty")
                     powerpointFile = null
                 } else {
-                    Log.d("DetailsViewModel", "PowerPoint temp file created successfully: ${powerpointFile.length()} bytes")
+                    Log.d("DetailsViewModel", "PowerPoint temp file created successfully: ${powerpointFile?.length()} bytes")
                 }
                 
             } catch (e: Exception) {

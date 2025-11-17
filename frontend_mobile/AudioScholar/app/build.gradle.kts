@@ -3,19 +3,25 @@ plugins {
     alias(libs.plugins.jetbrainsKotlinAndroid)
     kotlin("kapt")
     id("com.google.dagger.hilt.android")
-    alias(libs.plugins.compose.compiler)
     id("com.google.gms.google-services")
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.24"
+    alias(libs.plugins.kotlinSerialization)
+}
+
+android {
+    kotlinOptions {
+        jvmTarget = "17"
+        freeCompilerArgs += "-Xskip-metadata-version-check"
+    }
 }
 
 android {
     namespace = "edu.cit.audioscholar"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "edu.cit.audioscholar"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
@@ -42,6 +48,9 @@ android {
         compose = true
         buildConfig = true
     }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.15"
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -52,7 +61,7 @@ android {
 dependencies {
     implementation("com.github.jeziellago:compose-markdown:0.5.7")
 
-    val room_version = "2.7.1"
+    val room_version = "2.8.1"
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version")
     kapt("androidx.room:room-compiler:$room_version")
@@ -69,7 +78,7 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.6.1")
     implementation("com.google.accompanist:accompanist-permissions:0.31.5-beta")
-    implementation("org.jetbrains.kotlin:kotlin-reflect:1.9.24")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation(libs.androidx.lifecycle.runtime.compose)
 
     implementation(libs.google.android.material)
@@ -138,4 +147,11 @@ dependencies {
 
 kapt {
     correctErrorTypes = true
+    arguments {
+        arg("room.schemaLocation", project.layout.buildDirectory.dir("schemas").get().asFile.absolutePath)
+        arg("room.incremental", "true")
+        arg("room.expandProjection", "true")
+        // Note: Disabling schema export for quick fix.
+        arg("room.schemaLocation.disabled", "true")
+    }
 }

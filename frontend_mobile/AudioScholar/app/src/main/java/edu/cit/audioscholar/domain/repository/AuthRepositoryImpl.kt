@@ -161,6 +161,11 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun verifyGoogleToken(request: FirebaseTokenRequest): AuthResult {
         return try {
             Log.d(TAG_AUTH_REPO, "Sending Google ID token to backend for verification.")
+            Log.d(TAG_AUTH_REPO, "[DEBUG] ID Token received from Google: ${request.idToken != null}")
+            Log.d(TAG_AUTH_REPO, "[DEBUG] ID Token length: ${request.idToken?.length ?: 0}")
+            if (request.idToken != null) {
+                Log.d(TAG_AUTH_REPO, "[DEBUG] ID Token preview: ${request.idToken.substring(0, minOf(50, request.idToken.length))}...")
+            }
             val response = apiService.verifyGoogleToken(request)
 
             if (response.isSuccessful) {

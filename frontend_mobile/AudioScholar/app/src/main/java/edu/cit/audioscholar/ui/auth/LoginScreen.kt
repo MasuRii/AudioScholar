@@ -88,8 +88,9 @@ fun LoginScreen(
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
 
     val googleSignInClient = remember {
+        val clientId = context.getString(R.string.default_web_client_id)
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(clientId)
             .requestEmail()
             .build()
         GoogleSignIn.getClient(context, gso)
