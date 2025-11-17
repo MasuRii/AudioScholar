@@ -14,54 +14,31 @@ const Summaryview = () => {
     const fetchSummary = async () => {
       try {
         setLoading(true);
+        const cachedSummary = localStorage.getItem(`summary_${recordingId}`);
 
-        const placeholderData = {
-          id: recordingId,
-          title: 'Introduction to Machine Learning',
-          course: 'CS401',
-          instructor: 'Dr. Sarah Miller',
-          date: '1/18/2024',
-          status: 'Completed',
-          keyPoints: [
-            'Understanding basic ML concepts',
-            'Types of machine learning algorithms',
-            'Supervised vs Unsupervised learning',
-            'Common applications of ML',
-            'Model evaluation metrics',
-          ],
-          keyVocabulary: [
-            { term: 'Supervised Learning', definition: 'A type of ML where the model is trained on labeled data.' },
-            { term: 'Unsupervised Learning', definition: 'A type of ML where the model finds patterns in unlabeled data.' },
-            { term: 'Neural Network', definition: 'A computing system inspired by biological neural networks.' },
-            { term: 'Overfitting', definition: 'When a model learns the training data too well, including noise and outliers.' },
-          ],
-          detailedSummary: [
-            {
-              heading: 'Introduction to ML Concepts',
-              content: 'Machine learning is a subset of Artificial Intelligence that focuses on developing algorithms that enable computers to learn from data without being explicitly programmed. The lecture covered fundamental concepts and their practical applications in modern technology.'
+        if (cachedSummary) {
+          setSummaryData(JSON.parse(cachedSummary));
+          setLoading(false);
+        } else {
+          const token = localStorage.getItem('AuthToken');
+          const response = await fetch(`http://localhost:8080/api/recordings/${recordingId}`, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
             },
-            {
-              heading: 'Types of Machine Learning',
-              content: 'We discussed three main types of machine learning: supervised learning, unsupervised learning, and reinforcement learning. Each type has its specific use cases and applications in real-world scenarios.'
-            },
-            {
-              heading: 'Model Evaluation',
-              content: 'Various metrics for evaluating machine learning models were covered, including accuracy, precision, recall, and F1 score. The importance of choosing appropriate evaluation metrics based on the problem context was emphasized.'
-            },
-          ],
-          practiceQuestions: [
-            'What are the key differences between supervised and unsupervised learning?',
-            'How do you choose appropriate evaluation metrics for a ML model?',
-            'What are common challenges in implementing ML solutions?',
-          ],
-          transcript: 'This is a placeholder for the transcript content.',
-          myNotes: 'This is a placeholder for your personal notes.',
-        };
-        setSummaryData(placeholderData);
+          });
 
-        setLoading(false);
+          if (!response.ok) {
+            throw new Error('Failed to fetch summary');
+          }
+
+          const data = await response.json();
+          localStorage.setItem(`summary_${recordingId}`, JSON.stringify(data));
+          setSummaryData(data);
+        }
       } catch (err) {
         setError(err);
+      } finally {
         setLoading(false);
       }
     };

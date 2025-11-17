@@ -173,6 +173,13 @@ const RecordingData = () => {
     setLoading(true);
     setError(null);
     try {
+      const cachedData = localStorage.getItem(`recording_metadata_${id}`);
+      if (cachedData) {
+        setRecordingData(JSON.parse(cachedData));
+        setLoading(false);
+        return;
+      }
+
       const token = localStorage.getItem('AuthToken');
       if (!token) {
         setError("User not authenticated. Please log in.");
@@ -189,6 +196,7 @@ const RecordingData = () => {
       const foundRecording = allRecordings.find(rec => rec.id === id);
 
       if (foundRecording) {
+        localStorage.setItem(`recording_metadata_${id}`, JSON.stringify(foundRecording));
         setRecordingData(foundRecording);
         console.log("Found recording metadata:", foundRecording);
       } else {
@@ -238,97 +246,117 @@ const RecordingData = () => {
     }
     const headers = { 'Authorization': `Bearer ${token}` };
 
-    const summaryUrl = `${API_BASE_URL}api/recordings/${actualRecordingId}/summary`;
-    let summaryStatus = null;
-    try {
-      console.log(`Fetching summary from: ${summaryUrl}`);
-      const summaryResponse = await axios.get(summaryUrl, { headers });
-      summaryStatus = summaryResponse.status;
+    const summaryCacheKey = `recording_summary_${actualRecordingId}`;
+    const recommendationsCacheKey = `recording_recommendations_${actualRecordingId}`;
 
-      if (summaryResponse.status === 200) {
-        setSummaryData(summaryResponse.data);
-        console.log("Fetched summary (200 OK):", summaryResponse.data);
-      } else if (summaryResponse.status === 202) {
-        const message = summaryResponse.data?.message || "Processing is ongoing.";
-        console.log(`Summary status 202 Accepted: ${message}`);
-        setSummaryError(message);
-        setSummaryData(null);
-      } else {
-        console.warn(`Unexpected success status for summary: ${summaryResponse.status}`);
-        setSummaryError(`Unexpected status: ${summaryResponse.status}`);
-        setSummaryData(null);
-      }
-    } catch (err) {
-      console.error('Error fetching summary:', err);
-      summaryStatus = err.response?.status;
-      if (err.response) {
-        const errorData = err.response.data;
-        const message = errorData?.message || `Failed to fetch summary (Status: ${err.response.status})`;
-        if (err.response.status === 404) {
-          setSummaryError('Summary not found or recording processing failed/halted.');
-        } else if (err.response.status === 403) {
-          setSummaryError('Access denied to summary.');
-        } else if (err.response.status === 401) {
-          setError("Session expired or not authorized. Please log in again.");
-          localStorage.removeItem('AuthToken');
-          navigate('/signin');
-        } else if (err.response.status === 500 && errorData?.status?.startsWith('PROCESSING_HALTED')) {
-          setSummaryError(`Processing halted: ${errorData.message || 'Content unsuitable or no speech detected.'}`);
-        } else if (err.response.status === 500 && errorData?.status === 'FAILED') {
-          setSummaryError(`Processing failed: ${errorData.message || 'An error occurred during processing.'}`);
-        }
-        else {
-          setSummaryError(message);
-        }
-      } else if (err.request) {
-        setSummaryError("Network error fetching summary.");
-      } else {
-        setSummaryError("An unexpected error occurred fetching summary.");
-      }
-      setSummaryData(null);
-    } finally {
+    const cachedSummary = localStorage.getItem(summaryCacheKey);
+    const cachedRecommendations = localStorage.getItem(recommendationsCacheKey);
+
+    let summaryStatus = null;
+
+    if (cachedSummary) {
+      setSummaryData(JSON.parse(cachedSummary));
       setSummaryLoading(false);
+      summaryStatus = 200;
+    } else {
+      const summaryUrl = `${API_BASE_URL}api/recordings/${actualRecordingId}/summary`;
+      try {
+        console.log(`Fetching summary from: ${summaryUrl}`);
+        const summaryResponse = await axios.get(summaryUrl, { headers });
+        summaryStatus = summaryResponse.status;
+
+        if (summaryResponse.status === 200) {
+          localStorage.setItem(summaryCacheKey, JSON.stringify(summaryResponse.data));
+          setSummaryData(summaryResponse.data);
+          console.log("Fetched summary (200 OK):", summaryResponse.data);
+        } else if (summaryResponse.status === 202) {
+          const message = summaryResponse.data?.message || "Processing is ongoing.";
+          console.log(`Summary status 202 Accepted: ${message}`);
+          setSummaryError(message);
+          setSummaryData(null);
+        } else {
+          console.warn(`Unexpected success status for summary: ${summaryResponse.status}`);
+          setSummaryError(`Unexpected status: ${summaryResponse.status}`);
+          setSummaryData(null);
+        }
+      } catch (err) {
+        console.error('Error fetching summary:', err);
+        summaryStatus = err.response?.status;
+        if (err.response) {
+          const errorData = err.response.data;
+          const message = errorData?.message || `Failed to fetch summary (Status: ${err.response.status})`;
+          if (err.response.status === 404) {
+            setSummaryError('Summary not found or recording processing failed/halted.');
+          } else if (err.response.status === 403) {
+            setSummaryError('Access denied to summary.');
+          } else if (err.response.status === 401) {
+            setError("Session expired or not authorized. Please log in again.");
+            localStorage.removeItem('AuthToken');
+            navigate('/signin');
+          } else if (err.response.status === 500 && errorData?.status?.startsWith('PROCESSING_HALTED')) {
+            setSummaryError(`Processing halted: ${errorData.message || 'Content unsuitable or no speech detected.'}`);
+          } else if (err.response.status === 500 && errorData?.status === 'FAILED') {
+            setSummaryError(`Processing failed: ${errorData.message || 'An error occurred during processing.'}`);
+          }
+          else {
+            setSummaryError(message);
+          }
+        } else if (err.request) {
+          setSummaryError("Network error fetching summary.");
+        } else {
+          setSummaryError("An unexpected error occurred fetching summary.");
+        }
+        setSummaryData(null);
+      } finally {
+        setSummaryLoading(false);
+      }
     }
 
     const shouldFetchRecommendations = summaryStatus === 200 || summaryStatus === 202;
 
     if (shouldFetchRecommendations) {
-      const recommendationsUrl = `${API_BASE_URL}api/v1/recommendations/recording/${actualRecordingId}`;
-      try {
-        console.log(`Fetching recommendations from: ${recommendationsUrl}`);
-        const recommendationsResponse = await axios.get(recommendationsUrl, { headers });
-
-        if (recommendationsResponse.status === 200) {
-          setRecommendationsData(recommendationsResponse.data || []);
-          console.log("Fetched recommendations (200 OK):", recommendationsResponse.data);
-        } else {
-          console.warn(`Unexpected success status for recommendations: ${recommendationsResponse.status}`);
-          setRecommendationsError(`Unexpected status: ${recommendationsResponse.status}`);
-          setRecommendationsData([]);
-        }
-      } catch (err) {
-        console.error('Error fetching recommendations:', err);
-        if (err.response) {
-          const message = err.response.data?.message || `Failed to fetch recommendations (Status: ${err.response.status})`;
-          if (err.response.status === 404) {
-            setRecommendationsError('No recommendations found for this recording.');
-          } else if (err.response.status === 403) {
-            setRecommendationsError('Access denied to recommendations.');
-          } else if (err.response.status === 401) {
-            setError("Session expired or not authorized. Please log in again.");
-            localStorage.removeItem('AuthToken');
-            navigate('/signin');
-          } else {
-            setRecommendationsError(message);
-          }
-        } else if (err.request) {
-          setRecommendationsError("Network error fetching recommendations.");
-        } else {
-          setRecommendationsError("An unexpected error occurred fetching recommendations.");
-        }
-        setRecommendationsData([]);
-      } finally {
+      if (cachedRecommendations) {
+        setRecommendationsData(JSON.parse(cachedRecommendations));
         setRecommendationsLoading(false);
+      } else {
+        const recommendationsUrl = `${API_BASE_URL}api/v1/recommendations/recording/${actualRecordingId}`;
+        try {
+          console.log(`Fetching recommendations from: ${recommendationsUrl}`);
+          const recommendationsResponse = await axios.get(recommendationsUrl, { headers });
+
+          if (recommendationsResponse.status === 200) {
+            localStorage.setItem(recommendationsCacheKey, JSON.stringify(recommendationsResponse.data));
+            setRecommendationsData(recommendationsResponse.data || []);
+            console.log("Fetched recommendations (200 OK):", recommendationsResponse.data);
+          } else {
+            console.warn(`Unexpected success status for recommendations: ${recommendationsResponse.status}`);
+            setRecommendationsError(`Unexpected status: ${recommendationsResponse.status}`);
+            setRecommendationsData([]);
+          }
+        } catch (err) {
+          console.error('Error fetching recommendations:', err);
+          if (err.response) {
+            const message = err.response.data?.message || `Failed to fetch recommendations (Status: ${err.response.status})`;
+            if (err.response.status === 404) {
+              setRecommendationsError('No recommendations found for this recording.');
+            } else if (err.response.status === 403) {
+              setRecommendationsError('Access denied to recommendations.');
+            } else if (err.response.status === 401) {
+              setError("Session expired or not authorized. Please log in again.");
+              localStorage.removeItem('AuthToken');
+              navigate('/signin');
+            } else {
+              setRecommendationsError(message);
+            }
+          } else if (err.request) {
+            setRecommendationsError("Network error fetching recommendations.");
+          } else {
+            setRecommendationsError("An unexpected error occurred fetching recommendations.");
+          }
+          setRecommendationsData([]);
+        } finally {
+          setRecommendationsLoading(false);
+        }
       }
     } else {
       console.log("Skipping recommendations fetch because summary was not successful or processing.");

@@ -131,8 +131,15 @@ const RecordingList = () => {
     useEffect(() => {
         isMountedRef.current = true;
         setLoading(true);
+
+        const cachedRecordings = localStorage.getItem('recording_list');
+        if (cachedRecordings) {
+            setRecordings(JSON.parse(cachedRecordings));
+        }
+
         fetchRecordings().then(initialData => {
             if (initialData && isMountedRef.current) {
+                localStorage.setItem('recording_list', JSON.stringify(initialData));
                 setRecordings(initialData);
                 startPolling(initialData);
             }
