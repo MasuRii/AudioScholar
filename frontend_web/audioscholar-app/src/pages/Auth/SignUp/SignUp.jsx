@@ -59,7 +59,7 @@ const SignUp = () => {
       setLastName('');
       setEmail('');
       setPassword('');
-      navigate('/verify-email-code', { state: { email: email } });
+      navigate('/verify-email-notice', { state: { email: email } });
 
     } catch (err) {
       console.error('Sign up error:', err);
