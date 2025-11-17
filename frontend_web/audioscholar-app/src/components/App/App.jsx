@@ -6,7 +6,7 @@ import SignUp from '../../pages/Auth/SignUp/SignUp';
 import ForgotPassword from '../../pages/Auth/ForgotPassword/ForgotPassword';
 import EmailVerification from '../../pages/Auth/EmailVerification/EmailVerification';
 import EmailVerificationNotice from '../../pages/Auth/EmailVerificationCodeInput/EmailVerificationNotice';
-import ResetPassword from '../../pages/Auth/ResetPassword/ResetPassword';
+import ResetPasswordRoute from '../../pages/Auth/ResetPassword/ResetPasswordRoute';
 import Dashboard from '../../pages/Dashboard/DashBoard';
 import HomePage from '../../pages/Home/HomePage';
 import RecordingData from '../../pages/RecordingData/RecordingData';
@@ -32,7 +32,7 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/email-verification" element={<EmailVerification />} />
           <Route path="/verify-email-notice" element={<EmailVerificationNotice />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/reset-password" element={<ResetPasswordRoute />} />
           <Route path="/auth/github/callback" element={<GithubAuthCallback />} />
 
           <Route path="/dashboard" element={

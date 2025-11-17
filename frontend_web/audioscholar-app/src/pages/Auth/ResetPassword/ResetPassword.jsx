@@ -1,14 +1,17 @@
+import { getAuth, confirmPasswordReset } from 'firebase/auth';
 import React, { useState } from 'react';
 import { FiLock, FiCheckCircle } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
+import { firebaseApp } from '../../../config/firebaseConfig';
 import { Footer, Header } from '../../Home/HomePage';
 
-const ResetPassword = () => {
+const ResetPassword = ({ oobCode }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
+    const auth = getAuth(firebaseApp);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -32,13 +35,7 @@ const ResetPassword = () => {
 
         setLoading(true);
         try {
-            // In a real application, you would typically get an actionCode from the URL
-            // and use Firebase's applyActionCode or confirmPasswordReset function here.
-            // For this simulation, we'll just show a success message.
-
-            // Simulate API call to reset password
-            await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-
+            await confirmPasswordReset(auth, oobCode, newPassword);
             setSuccess(true);
             setNewPassword('');
             setConfirmPassword('');
