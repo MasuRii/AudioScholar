@@ -1,0 +1,20 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "spotless:apply (Pre-Launch Format)",
+            "type": "shell",
+            "command": "${workspaceFolder}\\mvnw.cmd",
+            "args": ["spotless:apply"],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated"
+            },
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    ]
+}

@@ -1,8 +1,8 @@
-import { getAuth, GoogleAuthProvider, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, sendEmailVerification, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import React, { useState } from 'react';
 import { FaGithub } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
-import { FiMic, FiCheckCircle, FiYoutube, FiUpload, FiCloud, FiBriefcase } from 'react-icons/fi';
+import { FiBriefcase, FiCheckCircle, FiCloud, FiMic, FiUpload, FiYoutube } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
 import { verifyFirebaseTokenWithBackend, verifyGoogleTokenWithBackend } from '../../../services/authService';
@@ -13,6 +13,7 @@ const SignIn = () => {
         const [password, setPassword] = useState('');
         const [loading, setLoading] = useState(false);
         const [error, setError] = useState(null);
+        const [showResendVerification, setShowResendVerification] = useState(false);
         const navigate = useNavigate();
         const auth = getAuth(firebaseApp);
 
@@ -46,6 +47,7 @@ const SignIn = () => {
         const handleSubmit = async (e) => {
                 e.preventDefault();
                 setError(null);
+                setShowResendVerification(false);
 
                 if (!email || !password) {
                         setError('Please enter both email and password.');
@@ -58,6 +60,13 @@ const SignIn = () => {
                         const userCredential = await signInWithEmailAndPassword(auth, email, password);
                         const user = userCredential.user;
                         console.log('Firebase email/password sign-in successful for user:', user.uid);
+
+                        if (!user.emailVerified) {
+                                setError('Please verify your email before signing in.');
+                                setShowResendVerification(true);
+                                setLoading(false);
+                                return;
+                        }
 
                         const idToken = await user.getIdToken();
                         console.log('Obtained Firebase ID Token.');
@@ -82,6 +91,19 @@ const SignIn = () => {
                                 }
                         }
                         setError(errorMessage);
+                        setLoading(false);
+                }
+        };
+
+        const handleResendVerification = async () => {
+                setLoading(true);
+                try {
+                        await sendEmailVerification(auth.currentUser);
+                        setError('A new verification email has been sent. Please check your inbox.');
+                } catch (err) {
+                        console.error('Error resending verification email:', err);
+                        setError('Failed to resend verification email. Please try again later.');
+                } finally {
                         setLoading(false);
                 }
         };
@@ -255,37 +277,50 @@ const SignIn = () => {
                                                                                                 </div>
                                                                                         );
                                                                                 })()}
-                                                                        </div>
-
-                                                                        {/* Navigation - below the cards */}
-                                                                        {signInFeatures.length > 1 && ( // Only show nav if more than one feature to cycle through
-                                                                                <div className="mt-8 w-full max-w-sm"> {/* Increased mt from mt-6 to mt-8 */}
-                                                                                        <div className="flex items-center justify-center space-x-2.5 mb-4">
-                                                                                                {signInFeatures.map((_, index) => (
-                                                                                                        <button
-                                                                                                                key={index}
-                                                                                                                onClick={() => setCurrentFeatureIndex(index)}
-                                                                                                                className={`w-2 h-2 rounded-full transition-all duration-300 ${currentFeatureIndex === index ? 'bg-white ring-2 ring-offset-2 ring-offset-[#2D8A8A] ring-white scale-110' : 'bg-gray-400 bg-opacity-40 hover:bg-opacity-60'}`}
-                                                                                                                aria-label={`Go to feature ${index + 1}`}
-                                                                                                        />
-                                                                                                ))}
-                                                                                        </div>
-                                                                                </div>
-                                                                        )}
-                                                                </div>
-                                                        )}
-                                                        {/* Fallback or Spacer if no features, or to help with justify-between if used */}
-                                                        {signInFeatures.length === 0 && <div className="flex-grow"></div>} {/* Adjusted condition from !displayedFeature */}
-                                                </div>
-
+                                                                                                                                                                                </div>
+                                                                        
+                                                                                                                                                {/* Navigation - below the cards */}
+                                                                                                                                                {signInFeatures.length > 1 && ( // Only show nav if more than one feature to cycle through
+                                                                                                                                                        <div className="mt-8 w-full max-w-sm"> {/* Increased mt from mt-6 to mt-8 */}
+                                                                                                                                                                <div className="flex items-center justify-center space-x-2.5 mb-4">
+                                                                                                                                                                        {signInFeatures.map((_, index) => (
+                                                                                                                                                                                <button
+                                                                                                                                                                                        key={index}
+                                                                                                                                                                                        onClick={() => setCurrentFeatureIndex(index)}
+                                                                                                                                                                                        className={`w-2 h-2 rounded-full transition-all duration-300 ${currentFeatureIndex === index ? 'bg-white ring-2 ring-offset-2 ring-offset-[#2D8A8A] ring-white scale-110' : 'bg-gray-400 bg-opacity-40 hover:bg-opacity-60'}`}
+                                                                                                                                                                                        aria-label={`Go to feature ${index + 1}`}
+                                                                                                                                                                                />
+                                                                                                                                                                        ))}
+                                                                                                                                                                </div>
+                                                                                                                                                                <div className="flex justify-between">
+                                                                                                                                                                        <button
+                                                                                                                                                                                onClick={handlePrevFeature}
+                                                                                                                                                                                className="px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition"
+                                                                                                                                                                        >
+                                                                                                                                                                                Previous
+                                                                                                                                                                        </button>
+                                                                                                                                                                        <button
+                                                                                                                                                                                onClick={handleNextFeature}
+                                                                                                                                                                                className="px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition"
+                                                                                                                                                                        >
+                                                                                                                                                                                Next
+                                                                                                                                                                        </button>
+                                                                                                                                                                </div>
+                                                                                                                                                        </div>
+                                                                                                                                                )}
+                                                                                                                                        </div>
+                                                                                                                                )}
+                                                                                                                                {/* Fallback or Spacer if no features, or to help with justify-between if used */}
+                                                                                                                                {signInFeatures.length === 0 && <div className="flex-grow"></div>} {/* Adjusted condition from !displayedFeature */}
+                                                                                                                        </div>
                                                 <div className="bg-white p-8 md:p-10">
                                                         <h1 className="text-3xl font-bold text-gray-800 mb-2">Sign In</h1>
                                                         <p className="text-gray-600 mb-6">Welcome back! Please enter your details or sign in with Google.</p>
 
-                                                        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                                                        <div className="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                                                                 <button
                                                                         onClick={handleGoogleSignIn}
-                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105"
                                                                         disabled={loading}
                                                                 >
                                                                         <FcGoogle className="w-5 h-5" />
@@ -293,7 +328,7 @@ const SignIn = () => {
                                                                 </button>
                                                                 <button
                                                                         onClick={handleGithubSignIn}
-                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105"
                                                                         disabled={loading}
                                                                 >
                                                                         <FaGithub className="w-5 h-5" />
@@ -301,7 +336,7 @@ const SignIn = () => {
                                                                 </button>
                                                         </div>
 
-                                                        <form className="space-y-4" onSubmit={handleSubmit}>
+                                                        <form className="space-y-4 animate-fade-in-up" style={{ animationDelay: '200ms' }} onSubmit={handleSubmit}>
                                                                 <div>
                                                                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                                                                         <input
@@ -334,6 +369,16 @@ const SignIn = () => {
                                                                         <p className="text-red-500 text-sm mt-2 text-center">{error}</p>
                                                                 )}
 
+                                                                {showResendVerification && (
+                                                                        <button
+                                                                                onClick={handleResendVerification}
+                                                                                className="w-full bg-yellow-500 text-white py-2 px-4 rounded-lg font-medium transition hover:bg-yellow-600"
+                                                                                disabled={loading}
+                                                                        >
+                                                                                {loading ? 'Sending...' : 'Resend Verification Email'}
+                                                                        </button>
+                                                                )}
+
                                                                 <div className="flex items-center justify-between text-sm">
                                                                         <div className="flex items-center">
                                                                                 <input id="remember-me" name="remember-me" type="checkbox" className="h-4 w-4 text-[#2D8A8A] focus:ring-[#236b6b] border-gray-300 rounded" />
@@ -344,7 +389,7 @@ const SignIn = () => {
 
                                                                 <button
                                                                         type="submit"
-                                                                        className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium transition ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b]'}`}
+                                                                        className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium transition ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b]'} transform hover:scale-105`}
                                                                         disabled={loading}
                                                                 >
                                                                         {loading ? 'Signing In...' : 'Log In with Email'}

@@ -4,20 +4,21 @@ import jakarta.validation.constraints.NotBlank;
 
 public class FcmTokenRequest {
 
-    @NotBlank(message = "FCM token cannot be blank")
-    private String token;
+	@NotBlank(message = "FCM token cannot be blank")
+	private String token;
 
-    public FcmTokenRequest() {}
+	public FcmTokenRequest() {
+	}
 
-    public FcmTokenRequest(String token) {
-        this.token = token;
-    }
+	public FcmTokenRequest(String token) {
+		this.token = token;
+	}
 
-    public String getToken() {
-        return token;
-    }
+	public String getToken() {
+		return token;
+	}
 
-    public void setToken(String token) {
-        this.token = token;
-    }
+	public void setToken(String token) {
+		this.token = token;
+	}
 }
