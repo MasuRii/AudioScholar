@@ -7,8 +7,9 @@
             "cwd": "${workspaceFolder}",
             "mainClass": "edu.cit.audioscholar.AudioscholarApplication",
             "projectName": "audioscholar",
-            "args": "",
+            "args": "--spring.profiles.active=local",
             "envFile": "${workspaceFolder}/.env",
+            "vmArgs": "--enable-native-access=ALL-UNNAMED",
             "preLaunchTask": "spotless:apply (Pre-Launch Format)"
         }
     ]
