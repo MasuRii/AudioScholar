@@ -55,8 +55,12 @@ public class GeminiService {
 	private static final int MAX_OUTPUT_TOKENS_TRANSCRIPTION = 32768;
 	private static final int MAX_OUTPUT_TOKENS_SUMMARIZATION = 65536;
 
-	private final RestTemplate restTemplate = new RestTemplate();
+	private final RestTemplate restTemplate;
 	private final ObjectMapper objectMapper = new ObjectMapper();
+
+	public GeminiService(RestTemplate restTemplate) {
+		this.restTemplate = restTemplate;
+	}
 
 	private static final Map<String, Object> SUMMARY_RESPONSE_SCHEMA = createSummarySchema();
 	private static final Map<String, Object> TRANSCRIPT_RESPONSE_SCHEMA = createTranscriptSchema();
