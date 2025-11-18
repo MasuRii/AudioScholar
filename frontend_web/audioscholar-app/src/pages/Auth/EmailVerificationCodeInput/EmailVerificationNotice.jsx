@@ -1,7 +1,7 @@
 import { getAuth, sendEmailVerification } from 'firebase/auth';
 import React, { useEffect, useState } from 'react';
 import { FiMail } from 'react-icons/fi';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
 import { Footer, Header } from '../../Home/HomePage';
 
@@ -13,6 +13,7 @@ const EmailVerificationNotice = () => {
     const [canResend, setCanResend] = useState(true);
     const [resendAttempts, setResendAttempts] = useState(0);
     const location = useLocation();
+    const navigate = useNavigate();
     const auth = getAuth(firebaseApp);
 
     const handleResendVerification = async () => {
@@ -56,6 +57,22 @@ const EmailVerificationNotice = () => {
         }
         return () => clearInterval(interval);
     }, [canResend, timer]);
+
+    // Polling for email verification status
+    useEffect(() => {
+        const checkVerification = setInterval(async () => {
+            const user = auth.currentUser;
+            if (user) {
+                await user.reload(); // Reload user to get the latest emailVerified status
+                if (user.emailVerified) {
+                    clearInterval(checkVerification);
+                    navigate('/signin'); // Redirect to sign-in page
+                }
+            }
+        }, 3000); // Check every 3 seconds
+
+        return () => clearInterval(checkVerification); // Cleanup on unmount
+    }, [auth, navigate]);
 
 
     return (
