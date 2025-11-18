@@ -222,10 +222,18 @@ public class SummarizationListenerService {
 
 				log.info("[{}] Calling GeminiService to generate summary with PDF context (direct Google Files API)...",
 						metadataId);
-				String summarizationJson = geminiService.generateSummaryWithGoogleFileUri(transcript,
-						googleFilesApiPdfUri, metadataId);
 
-				processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+				try {
+					String summarizationJson = geminiService.generateSummaryWithGoogleFileUri(transcript,
+							googleFilesApiPdfUri, metadataId);
+					processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+				} catch (Exception e) {
+					log.error("[{}] Critical failure during summarization with Google Files API: {}", metadataId,
+							e.getMessage(), e);
+					updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARY_FAILED,
+							"Summarization failed after all retry attempts: " + e.getMessage());
+					return;
+				}
 				return;
 			}
 
@@ -246,10 +254,18 @@ public class SummarizationListenerService {
 					log.info("[{}] Successfully downloaded PDF from ConvertAPI to local file", metadataId);
 
 					log.info("[{}] Calling GeminiService to generate summary with PDF context...", metadataId);
-					String summarizationJson = geminiService.generateSummaryWithPdfContext(transcript, tempPdfPath,
-							metadataId);
 
-					processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+					try {
+						String summarizationJson = geminiService.generateSummaryWithPdfContext(transcript, tempPdfPath,
+								metadataId);
+						processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+					} catch (Exception e) {
+						log.error("[{}] Critical failure during summarization with ConvertAPI PDF context: {}",
+								metadataId, e.getMessage(), e);
+						updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARY_FAILED,
+								"Summarization failed after all retry attempts: " + e.getMessage());
+						return;
+					}
 				} catch (IOException e) {
 					log.error("[{}] Error downloading PDF from ConvertAPI URL: {}", metadataId, e.getMessage(), e);
 					updateMetadataStatus(metadataId, userId, ProcessingStatus.FAILED,
@@ -273,9 +289,17 @@ public class SummarizationListenerService {
 				updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARIZING, null);
 
 				log.info("[{}] Calling GeminiService to generate transcript-only summary...", metadataId);
-				String summarizationJson = geminiService.generateTranscriptOnlySummary(transcript, metadataId);
 
-				processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+				try {
+					String summarizationJson = geminiService.generateTranscriptOnlySummary(transcript, metadataId);
+					processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+				} catch (Exception e) {
+					log.error("[{}] Critical failure during transcript-only summarization: {}", metadataId,
+							e.getMessage(), e);
+					updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARY_FAILED,
+							"Summarization failed after all retry attempts: " + e.getMessage());
+					return;
+				}
 				return;
 			} else if (StringUtils.hasText(metadata.getNhostPptxFileId())) {
 				String pdfUrl = metadata.getGeneratedPdfUrl();
@@ -327,10 +351,18 @@ public class SummarizationListenerService {
 						log.info("[{}] Successfully downloaded PDF from ConvertAPI to local file", metadataId);
 
 						log.info("[{}] Calling GeminiService to generate summary with PDF context...", metadataId);
-						String summarizationJson = geminiService.generateSummaryWithPdfContext(transcript, tempPdfPath,
-								metadataId);
 
-						processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+						try {
+							String summarizationJson = geminiService.generateSummaryWithPdfContext(transcript,
+									tempPdfPath, metadataId);
+							processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+						} catch (Exception e) {
+							log.error("[{}] Critical failure during summarization with ConvertAPI PDF: {}", metadataId,
+									e.getMessage(), e);
+							updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARY_FAILED,
+									"Summarization failed after all retry attempts: " + e.getMessage());
+							return;
+						}
 					} catch (IOException e) {
 						log.error("[{}] Error downloading PDF from ConvertAPI URL: {}", metadataId, e.getMessage(), e);
 						updateMetadataStatus(metadataId, userId, ProcessingStatus.FAILED,
@@ -360,10 +392,18 @@ public class SummarizationListenerService {
 					log.info("[{}] Successfully downloaded PDF to local file", metadataId);
 
 					log.info("[{}] Calling GeminiService to generate summary with PDF context...", metadataId);
-					String summarizationJson = geminiService.generateSummaryWithPdfContext(transcript, tempPdfPath,
-							metadataId);
 
-					processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+					try {
+						String summarizationJson = geminiService.generateSummaryWithPdfContext(transcript, tempPdfPath,
+								metadataId);
+						processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+					} catch (Exception e) {
+						log.error("[{}] Critical failure during summarization with PDF context: {}", metadataId,
+								e.getMessage(), e);
+						updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARY_FAILED,
+								"Summarization failed after all retry attempts: " + e.getMessage());
+						return;
+					}
 				} finally {
 					if (tempPdfPath != null) {
 						try {
@@ -380,8 +420,17 @@ public class SummarizationListenerService {
 						metadataId);
 
 				updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARIZING, null);
-				String summarizationJson = geminiService.generateTranscriptOnlySummary(transcript, metadataId);
-				processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+
+				try {
+					String summarizationJson = geminiService.generateTranscriptOnlySummary(transcript, metadataId);
+					processSummarizationResult(summarizationJson, metadataId, userId, metadata);
+				} catch (Exception e) {
+					log.error("[{}] Critical failure during fallback transcript-only summarization: {}", metadataId,
+							e.getMessage(), e);
+					updateMetadataStatus(metadataId, userId, ProcessingStatus.SUMMARY_FAILED,
+							"Summarization failed after all retry attempts: " + e.getMessage());
+					return;
+				}
 			}
 
 		} catch (FirestoreInteractionException e) {

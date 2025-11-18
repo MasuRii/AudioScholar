@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,6 +21,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -43,15 +46,49 @@ public class GeminiService {
 	@Value("${google.ai.api.key}")
 	private String apiKey;
 
+	@Value("${gemini.api.retry.max-attempts:3}")
+	private int maxRetryAttempts;
+
+	@Value("${gemini.api.retry.base-delay-ms:1000}")
+	private long baseRetryDelayMs;
+
+	@Value("${gemini.api.retry.max-delay-ms:30000}")
+	private long maxRetryDelayMs;
+
+	@Value("${gemini.api.retry.backoff-multiplier:2.0}")
+	private double backoffMultiplier;
+
+	@Value("${gemini.api.max-total-attempts:21}")
+	private int maxTotalAttempts;
+
+	@Value("${gemini.api.model.fallback-sequence:gemini-2.5-pro,gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite}")
+	private String modelFallbackSequence;
+
+	@Value("${gemini.api.model.transcription:gemini-2.0-flash}")
+	private String transcriptionModelName;
+
+	@Value("${gemini.api.model.summarization:gemini-2.5-flash}")
+	private String summarizationModelName;
+
 	private static final String API_BASE_URL = "https://generativelanguage.googleapis.com";
 	private static final String FILES_API_UPLOAD_PATH = "/upload/v1beta/files";
 	private static final String FILES_API_BASE_URL = API_BASE_URL;
-	private static final String TRANSCRIPTION_MODEL_NAME = "gemini-2.0-flash";
-	private static final String SUMMARIZATION_MODEL_NAME = "gemini-2.5-flash";
 	private static final String GENERATE_CONTENT_PATH = "/v1beta/models/{modelName}:generateContent";
 
-	private static final int MAX_RETRIES = 3;
-	private static final long RETRY_DELAY_MS = 1000;
+	// Legacy constants for backward compatibility
+	@Deprecated
+	private static final String TRANSCRIPTION_MODEL_NAME_LEGACY = "gemini-2.0-flash";
+	@Deprecated
+	private static final String SUMMARIZATION_MODEL_NAME_LEGACY = "gemini-2.5-flash";
+
+	private static final int LEGACY_MAX_RETRIES = 3;
+	private static final long LEGACY_RETRY_DELAY_MS = 1000;
+
+	// Legacy constants referenced by old methods
+	private static final String TRANSCRIPTION_MODEL_NAME = TRANSCRIPTION_MODEL_NAME_LEGACY;
+	private static final String SUMMARIZATION_MODEL_NAME = SUMMARIZATION_MODEL_NAME_LEGACY;
+	private static final int MAX_RETRIES = LEGACY_MAX_RETRIES;
+	private static final long RETRY_DELAY_MS = LEGACY_RETRY_DELAY_MS;
 	private static final int MAX_OUTPUT_TOKENS_TRANSCRIPTION = 32768;
 	private static final int MAX_OUTPUT_TOKENS_SUMMARIZATION = 65536;
 
@@ -60,6 +97,345 @@ public class GeminiService {
 
 	public GeminiService(RestTemplate restTemplate) {
 		this.restTemplate = restTemplate;
+	}
+
+	/**
+	 * Get the prioritized list of models for fallback sequence
+	 */
+	private List<String> getModelFallbackSequence() {
+		return Arrays.stream(modelFallbackSequence.split(",")).map(String::trim).filter(model -> !model.isEmpty())
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * Check if an error is transient and should be retried
+	 */
+	private boolean isTransientError(Exception e) {
+		if (e instanceof HttpServerErrorException) {
+			HttpStatusCode status = ((HttpServerErrorException) e).getStatusCode();
+			int statusCode = status.value();
+			return statusCode == 503 || statusCode == 502 || statusCode == 504;
+		}
+		if (e instanceof HttpClientErrorException) {
+			HttpStatusCode status = ((HttpClientErrorException) e).getStatusCode();
+			int statusCode = status.value();
+			return statusCode == 429; // Too Many Requests
+		}
+		return e instanceof ResourceAccessException;
+	}
+
+	/**
+	 * Calculate exponential backoff delay with jitter
+	 */
+	private long calculateBackoffDelay(int attempt) {
+		long exponentialDelay = (long) (baseRetryDelayMs * Math.pow(backoffMultiplier, attempt - 1));
+		long boundedDelay = Math.min(exponentialDelay, maxRetryDelayMs);
+		// Add jitter (10-20% randomness) to prevent thundering herd
+		long jitter = (long) (boundedDelay * (0.1 + Math.random() * 0.1));
+		return boundedDelay + jitter;
+	}
+
+	/**
+	 * Enhanced retry logic with exponential backoff and model fallback
+	 */
+	private <T> T executeWithEnhancedRetry(RetryableOperation<T> operation, String operationName,
+			String... fallbackModels) throws Exception {
+		List<String> models = new ArrayList<>();
+		models.addAll(Arrays.asList(fallbackModels));
+		models.addAll(getModelFallbackSequence());
+
+		// Remove duplicates while preserving order
+		models = models.stream().distinct().collect(Collectors.toList());
+
+		int totalAttempts = 0;
+		int modelIndex = 0;
+		int retryAttempts = 0;
+
+		while (totalAttempts < maxTotalAttempts && modelIndex < models.size()) {
+			String currentModel = models.get(modelIndex);
+			retryAttempts = 0;
+
+			while (retryAttempts < maxRetryAttempts && totalAttempts < maxTotalAttempts) {
+				try {
+					totalAttempts++;
+					retryAttempts++;
+
+					log.info("{} attempt {}/{} with model {} (total attempt {}/{})", operationName, retryAttempts,
+							maxRetryAttempts, currentModel, totalAttempts, maxTotalAttempts);
+
+					return operation.execute(currentModel);
+
+				} catch (Exception e) {
+					String errorType = e.getClass().getSimpleName();
+					String statusInfo = "";
+
+					if (e instanceof HttpStatusCodeException) {
+						HttpStatusCodeException hse = (HttpStatusCodeException) e;
+						statusInfo = String.format(" (HTTP %d)", hse.getStatusCode().value());
+					}
+
+					if (isTransientError(e) && retryAttempts < maxRetryAttempts) {
+						long delay = calculateBackoffDelay(retryAttempts);
+						log.warn("{} failed with transient error {}{} on attempt {}/{}, retrying in {}ms with model {}",
+								operationName, errorType, statusInfo, retryAttempts, maxRetryAttempts, delay,
+								currentModel);
+
+						try {
+							TimeUnit.MILLISECONDS.sleep(delay);
+						} catch (InterruptedException ie) {
+							Thread.currentThread().interrupt();
+							throw new RuntimeException("Operation interrupted during retry wait", ie);
+						}
+					} else if (isTransientError(e)) {
+						// Transient error but max retries reached for this model, try next model
+						log.warn(
+								"{} failed with transient error {}{} after {} attempts with model {}, falling back to next model",
+								operationName, errorType, statusInfo, maxRetryAttempts, currentModel);
+						break; // Break inner retry loop, try next model
+					} else {
+						// Non-transient error, try next model
+						log.error("{} failed with non-transient error {}{} with model {}, falling back to next model",
+								operationName, errorType, statusInfo, currentModel);
+						break; // Break inner retry loop, try next model
+					}
+				}
+			}
+
+			modelIndex++;
+		}
+
+		// All models and attempts exhausted
+		log.error("{} failed after {} total attempts across all models and retry attempts", operationName,
+				totalAttempts);
+		throw new EnhancedGeminiException("All retry attempts and model fallbacks exhausted for " + operationName);
+	}
+
+	/**
+	 * Enhanced Gemini API call with fallback and retry logic for summarization
+	 */
+	public String callGeminiSummarizationAPIWithFallback(String promptText, String transcriptText) {
+		try {
+			return executeWithEnhancedRetry(
+					(model) -> callGeminiSummarizationAPISingleModel(promptText, transcriptText, model),
+					"Summarization API", summarizationModelName);
+		} catch (EnhancedGeminiException e) {
+			log.error("Enhanced summarization API failed: {}", e.getMessage());
+			return createErrorResponse("API Request Failed",
+					"All retry attempts and model fallbacks exhausted for summarization");
+		} catch (Exception e) {
+			log.error("Unexpected error in enhanced summarization API: {}", e.getMessage(), e);
+			return createErrorResponse("Unexpected Error", e.getMessage());
+		}
+	}
+
+	/**
+	 * Single model call for summarization
+	 */
+	private String callGeminiSummarizationAPISingleModel(String promptText, String transcriptText, String modelName)
+			throws Exception {
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+
+		String updatedPromptText = promptText
+				+ """
+
+						YOU MUST RETURN VALID JSON that strictly adheres to the provided schema. Do not include any explanatory text before or after the JSON. The JSON structure must include:
+						{
+						  "summaryText": "Your markdown summary here",
+						  "keyPoints": ["key point 1", "key point 2", ...],
+						  "topics": ["topic 1", "topic 2", ...],
+						  "glossary": [
+						    {"term": "term1", "definition": "definition1"},
+						    {"term": "term2", "definition": "definition2"},
+						    ...
+						  ]
+						}
+						""";
+
+		Map<String, Object> promptPart = Map.of("text", updatedPromptText);
+		Map<String, Object> transcriptPart = Map.of("text", transcriptText);
+		Map<String, Object> promptContent = Map.of("role", "user", "parts", List.of(promptPart));
+		Map<String, Object> transcriptContent = Map.of("role", "user", "parts", List.of(transcriptPart));
+		List<Object> contents = List.of(promptContent, transcriptContent);
+
+		Map<String, Object> generationConfig = new HashMap<>();
+		generationConfig.put("temperature", 0.4);
+		generationConfig.put("topP", 0.95);
+		generationConfig.put("topK", 40);
+		generationConfig.put("maxOutputTokens", MAX_OUTPUT_TOKENS_SUMMARIZATION);
+		generationConfig.put("response_mime_type", "application/json");
+		generationConfig.put("response_schema", SUMMARY_RESPONSE_SCHEMA);
+
+		Map<String, Object> requestBody = new HashMap<>();
+		requestBody.put("contents", contents);
+		requestBody.put("generationConfig", generationConfig);
+
+		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+		String summarizationUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+				.queryParam("key", apiKey).buildAndExpand(modelName).toUriString();
+
+		log.info("Calling Gemini Summarization API (Model: {}, JSON Schema Mode)", modelName);
+		log.trace("Summarization prompt text length: {}", updatedPromptText.length());
+		log.trace("Summarization transcript text length: {}", transcriptText.length());
+
+		ResponseEntity<String> response = restTemplate.exchange(summarizationUrl, HttpMethod.POST, requestEntity,
+				String.class);
+
+		log.info("Gemini Summarization API call successful using model {}. Status: {}", modelName,
+				response.getStatusCode());
+
+		String responseBody = response.getBody();
+		if (responseBody == null || responseBody.isBlank()) {
+			throw new RuntimeException("API returned success status but no content");
+		}
+
+		try {
+			String extractedJsonText = extractTextFromStandardResponse(responseBody);
+			log.debug("Successfully extracted JSON text from standard response structure (length: {}).",
+					extractedJsonText.length());
+			return extractedJsonText;
+		} catch (Exception e) {
+			log.error("Error extracting text from summarization response: {}", e.getMessage());
+			throw new RuntimeException("Failed to process summarization response", e);
+		}
+	}
+
+	/**
+	 * Enhanced transcription API with fallback and retry
+	 */
+	public String callGeminiTranscriptionAPIWithFallback(Path audioFilePath, String fileName) throws IOException {
+		if (audioFilePath == null || !Files.exists(audioFilePath)) {
+			log.error("Audio file path is null or does not exist: {}", audioFilePath);
+			throw new IOException("Audio file path is null or does not exist: " + audioFilePath);
+		}
+
+		String mimeType = getAudioMimeType(fileName);
+		long fileSize = Files.size(audioFilePath);
+		String displayName = fileName;
+
+		try {
+			String fileUri = uploadFile(audioFilePath, mimeType, fileSize, displayName);
+			log.info("File uploaded successfully. URI: {}", fileUri);
+
+			return executeWithEnhancedRetry((model) -> callGeminiTranscriptionAPISingleModel(fileUri, mimeType, model),
+					"Transcription API", transcriptionModelName);
+
+		} catch (IOException e) {
+			log.error("IOException during file handling or upload: {}", e.getMessage(), e);
+			throw e;
+		} catch (EnhancedGeminiException e) {
+			log.error("Enhanced transcription API failed: {}", e.getMessage());
+			return createErrorResponse("API Request Failed",
+					"All retry attempts and model fallbacks exhausted for transcription");
+		} catch (Exception e) {
+			log.error("Unexpected error during enhanced transcription process: {}", e.getMessage(), e);
+			return createErrorResponse("Unexpected Transcription Error", e.getMessage());
+		}
+	}
+
+	/**
+	 * Single model call for transcription
+	 */
+	private String callGeminiTranscriptionAPISingleModel(String fileUri, String mimeType, String modelName) {
+		HttpHeaders generateHeaders = new HttpHeaders();
+		generateHeaders.setContentType(MediaType.APPLICATION_JSON);
+
+		String promptText = "Transcribe the following audio content accurately. If the audio contains no speech or only silence, output the exact text '[NO SPEECH DETECTED]' in the transcript field. Otherwise, output only the spoken text. Maintain original punctuation, capitalization, and paragraph breaks as best as possible. For numbers, spell them as digits if they represent quantities or measurements, and as words if they are part of natural speech. Include any hesitations, repetitions, or fillers that are meaningful to the content.";
+		Map<String, Object> textPart = Map.of("text", promptText);
+		Map<String, Object> fileDataPart = Map.of("file_data", Map.of("mime_type", mimeType, "file_uri", fileUri));
+
+		List<Object> parts = List.of(textPart, fileDataPart);
+		Map<String, Object> content = Map.of("parts", parts);
+		List<Object> contents = List.of(content);
+
+		Map<String, Object> generationConfig = new HashMap<>();
+		generationConfig.put("temperature", 0.2);
+		generationConfig.put("maxOutputTokens", MAX_OUTPUT_TOKENS_TRANSCRIPTION);
+		generationConfig.put("response_mime_type", "application/json");
+		generationConfig.put("response_schema", TRANSCRIPT_RESPONSE_SCHEMA);
+
+		Map<String, Object> requestBody = new HashMap<>();
+		requestBody.put("contents", contents);
+		requestBody.put("generationConfig", generationConfig);
+
+		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
+
+		String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+				.queryParam("key", apiKey).buildAndExpand(modelName).toUriString();
+
+		log.info("Calling Gemini Transcription API (Model: {}) using file URI: {}", modelName, fileUri);
+
+		ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST, requestEntity,
+				String.class);
+
+		log.info("Gemini Transcription API (generateContent) call successful using model {}. Status: {}", modelName,
+				response.getStatusCode());
+
+		String responseBody = response.getBody();
+		if (responseBody == null || responseBody.isBlank()) {
+			throw new RuntimeException("API returned success status but no content");
+		}
+
+		try {
+			JsonNode responseNode = objectMapper.readTree(responseBody);
+
+			if (responseNode.has("candidates") && responseNode.path("candidates").isArray()
+					&& !responseNode.path("candidates").isEmpty()) {
+				JsonNode firstCandidate = responseNode.path("candidates").get(0);
+
+				if (firstCandidate.has("content") && firstCandidate.path("content").has("parts")
+						&& firstCandidate.path("content").path("parts").isArray()
+						&& !firstCandidate.path("content").path("parts").isEmpty()) {
+
+					JsonNode firstPart = firstCandidate.path("content").path("parts").get(0);
+					if (firstPart.has("text")) {
+						String jsonResponse = firstPart.path("text").asText();
+
+						String transcript = extractTranscriptFromJsonResponse(jsonResponse);
+						if (transcript != null) {
+							return transcript;
+						}
+					}
+				}
+			}
+
+			log.warn("Could not extract structured JSON transcript, falling back to standard extraction.");
+			String extractedText;
+			try {
+				extractedText = extractTextFromStandardResponse(responseBody);
+			} catch (Exception ex) {
+				throw new RuntimeException("Failed to extract transcript from standard response", ex);
+			}
+			log.info("Successfully extracted transcript text (length: {}).", extractedText.length());
+			return extractedText;
+
+		} catch (JsonProcessingException e) {
+			log.warn("Error parsing transcript JSON response, falling back to standard extraction: {}", e.getMessage());
+			String extractedText;
+			try {
+				extractedText = extractTextFromStandardResponse(responseBody);
+			} catch (Exception ex) {
+				throw new RuntimeException("Failed to extract transcript from standard response", ex);
+			}
+			log.info("Successfully extracted transcript text (length: {}).", extractedText.length());
+			return extractedText;
+		}
+	}
+
+	@FunctionalInterface
+	private interface RetryableOperation<T> {
+		T execute(String modelName) throws Exception;
+	}
+
+	private static class EnhancedGeminiException extends Exception {
+		public EnhancedGeminiException(String message) {
+			super(message);
+		}
+
+		public EnhancedGeminiException(String message, Throwable cause) {
+			super(message, cause);
+		}
 	}
 
 	private static final Map<String, Object> SUMMARY_RESPONSE_SCHEMA = createSummarySchema();
