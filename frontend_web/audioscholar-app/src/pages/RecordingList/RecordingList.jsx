@@ -16,6 +16,7 @@ const RecordingList = () => {
     const navigate = useNavigate();
     const pollIntervalRef = useRef(null);
     const isMountedRef = useRef(true);
+    const deletedIdsRef = useRef(new Set());
 
     const fetchRecordings = useCallback(async () => {
         console.log("Fetching recordings...");
@@ -33,7 +34,10 @@ const RecordingList = () => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            const sortedRecordings = response.data.sort((a, b) =>
+            // Filter out locally deleted items
+            const validRecordings = response.data.filter(rec => !deletedIdsRef.current.has(rec.id));
+
+            const sortedRecordings = validRecordings.sort((a, b) =>
                 (b.uploadTimestamp?.seconds ?? 0) - (a.uploadTimestamp?.seconds ?? 0)
             );
 
@@ -163,29 +167,32 @@ const RecordingList = () => {
             return;
         }
 
+        // Optimistic update
+        deletedIdsRef.current.add(idToDelete);
+        setRecordings(prev => prev.filter(rec => rec.id !== idToDelete));
+
         const token = localStorage.getItem('AuthToken');
         if (!token) {
+            // Revert optimistic update if no token
+            deletedIdsRef.current.delete(idToDelete);
+            fetchRecordings().then(data => data && setRecordings(data));
             setError("Authentication required.");
             navigate('/signin');
             return;
         }
 
         try {
-
             const url = `${API_BASE_URL}api/audio/metadata/${idToDelete}`;
-            const response = await axios.delete(url, {
+            await axios.delete(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
-            if (response.status === 200 || response.status === 204) {
-                setRecordings(prev => prev.filter(rec => rec.id !== idToDelete));
-                setError(null);
-                console.log(`Recording ${idToDelete} deleted successfully.`);
-            } else {
-                throw new Error(`Failed to delete. Status: ${response.status}`);
-            }
+            console.log(`Recording ${idToDelete} deleted successfully (Backend).`);
         } catch (err) {
             console.error('Error deleting recording:', err);
+            // Revert optimistic update on failure
+            deletedIdsRef.current.delete(idToDelete);
+            fetchRecordings().then(data => data && setRecordings(data));
+
             if (err.response && (err.response.status === 401 || err.response.status === 403)) {
                 setError("Session expired or not authorized. Please log in again.");
                 localStorage.removeItem('AuthToken');
@@ -214,9 +221,18 @@ const RecordingList = () => {
             return;
         }
 
-        setLoading(true);
-        setError(null);
+        // Optimistic Update: Clear UI immediately
+        const idsToDelete = recordingsToDelete.map(r => r.id);
+        idsToDelete.forEach(id => deletedIdsRef.current.add(id));
+        setRecordings([]);
+        
+        // Stop polling immediately since list is empty
+        if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+        }
 
+        // Background Processing (Fire and Forget)
         const deletePromises = recordingsToDelete.map(recording => {
             const url = `${API_BASE_URL}api/audio/metadata/${recording.id}`;
             return axios.delete(url, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -224,61 +240,27 @@ const RecordingList = () => {
                 .catch(error => ({ id: recording.id, status: 'rejected', reason: error }));
         });
 
-        try {
-            const results = await Promise.allSettled(deletePromises);
-
+        // We do NOT await this to block the UI. We let it run in background.
+        Promise.allSettled(deletePromises).then(results => {
             let successfulDeletions = 0;
             let failedDeletions = 0;
 
             results.forEach(result => {
                 if (result.status === 'fulfilled' && (result.value.response.status === 200 || result.value.response.status === 204)) {
                     successfulDeletions++;
-                    console.log(`Successfully deleted recording ${result.value.id}`);
                 } else {
                     failedDeletions++;
                     const recordingId = result.status === 'fulfilled' ? result.value.id : (result.reason && result.reason.id);
-                    console.error(`Failed to delete recording ${recordingId || 'unknown'}:`, result.status === 'rejected' ? result.reason : result.value.response);
+                    console.error(`Failed to delete recording ${recordingId || 'unknown'} in background:`, result.status === 'rejected' ? result.reason : result.value.response);
+                    // If it failed, we theoretically should add it back, but for "delete all", 
+                    // dragging them back might be confusing if the user thinks they are gone.
+                    // We will leave them hidden unless the user refreshes the page.
                 }
             });
-
-            if (failedDeletions > 0) {
-                setError(`${successfulDeletions} recordings deleted. ${failedDeletions} deletions failed. Please check console for details and try again if necessary.`);
-            } else if (successfulDeletions > 0) {
-                setError(null);
-                console.log(`All ${successfulDeletions} targeted recordings deleted successfully.`);
-            }
-
-        } catch (err) {
-            console.error('Error processing batch deletion results:', err);
-            setError('An unexpected error occurred while processing deletions. Please refresh.');
-        } finally {
-            fetchRecordings().then(updatedData => {
-                if (updatedData && isMountedRef.current) {
-                    setRecordings(updatedData);
-                    const stillNeedsPolling = updatedData.some(rec => {
-                        const statusUpper = rec.status?.toUpperCase();
-                        const isTerminal = TERMINAL_STATUSES.includes(statusUpper);
-                        if (isTerminal) return false;
-                        const isUploading = UPLOADING_STATUSES.includes(statusUpper);
-                        if (isUploading) {
-                            const elapsedSeconds = rec.uploadTimestamp?.seconds
-                                ? (Date.now() / 1000) - rec.uploadTimestamp.seconds
-                                : 0;
-                            return elapsedSeconds <= UPLOAD_TIMEOUT_SECONDS;
-                        }
-                        return true;
-                    });
-                    if (stillNeedsPolling && !pollIntervalRef.current) {
-                        startPolling(updatedData);
-                    } else if (!stillNeedsPolling && pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                        console.log("Polling stopped after deletions as no items require it.");
-                    }
-                }
-                if (isMountedRef.current) setLoading(false);
-            });
-        }
+            console.log(`Background deletion complete. Success: ${successfulDeletions}, Failed: ${failedDeletions}`);
+        }).catch(err => {
+             console.error('Error in background batch deletion:', err);
+        });
     };
 
     const formatDate = (timestamp) => {
