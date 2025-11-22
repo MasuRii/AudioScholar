@@ -1,7 +1,8 @@
-import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth, sendEmailVerification, updateProfile } from 'firebase/auth';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
+import { signUp } from '../../../services/authService';
 import { Footer, Header } from '../../Home/HomePage';
 
 const SignUp = () => {
@@ -50,6 +51,18 @@ const SignUp = () => {
       // Step 1: Create user with Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+
+      // Step 1.5: Update Firebase Profile and Sync with Backend
+      await updateProfile(user, {
+        displayName: `${firstName} ${lastName}`
+      });
+
+      await signUp({
+        firstName,
+        lastName,
+        email,
+        firebaseUid: user.uid
+      });
 
       // Step 2: Send verification email
       await sendEmailVerification(user);
