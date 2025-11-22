@@ -1,7 +1,8 @@
-import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'firebase/auth';
+import { getAuth, sendEmailVerification, signInWithEmailAndPassword } from 'firebase/auth';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
+import { signUp } from '../../../services/authService';
 import { Footer, Header } from '../../Home/HomePage';
 
 const SignUp = () => {
@@ -47,11 +48,22 @@ const SignUp = () => {
     setLoading(true);
 
     try {
-      // Step 1: Create user with Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Step 1: Call Backend to Create User (Firebase Auth + Firestore Profile)
+      // We delegate creation to the backend to ensure the Firestore profile is created 
+      // with the correct First and Last names immediately.
+      await signUp({
+        firstName,
+        lastName,
+        email,
+        password,
+        // firebaseUid is not needed here as the backend will create it
+      });
+
+      // Step 2: Sign In with the newly created credentials to get the Firebase session
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Step 2: Send verification email
+      // Step 3: Send verification email
       await sendEmailVerification(user);
 
       setSuccessMessage('Sign up successful! A verification email has been sent to your address. Please verify your email before signing in.');
@@ -63,8 +75,13 @@ const SignUp = () => {
 
     } catch (err) {
       console.error('Sign up error:', err);
-      if (err.code === 'auth/email-already-in-use') {
+
+      if (err.code === 'auth/email-already-in-use' || (err.status === 409)) {
         setBackendError('This email address is already in use.');
+      } else if (err.data && err.data.errors && Array.isArray(err.data.errors)) {
+        // Display specific backend validation errors
+        const validationErrors = err.data.errors.join(' ');
+        setBackendError(`Validation failed: ${validationErrors}`);
       } else {
         setBackendError(err.message || 'An unexpected error occurred during sign up.');
       }

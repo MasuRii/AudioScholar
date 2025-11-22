@@ -304,18 +304,20 @@ const TeamSection = () => {
         { name: "Math Lee L. Biacolo", role: "Developer", imgSrc: "/448017950_422357707435559_1572405260216380511_n.jpg" },
         { name: "Nathan John G. Orlanes", role: "Developer", imgSrc: "/120552317_4626392360735881_682202529014384747_n (1).jpg" },
         { name: "Terence John N. Duterte", role: "Developer", imgSrc: "/image.jpg" },
+        { name: "Christian Brent G. Alpez", role: "Developer", imgSrc: "/image.jpg" },
+        { name: "Claive Justin J. Barrientos", role: "Developer", imgSrc: "/Barrientos.jpg" },
     ];
 
     return (
         <section className="py-16 bg-white"> {/* Or choose another background e.g., bg-gray-100 */}
             <div className="container mx-auto px-4">
                 <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-gray-800 mb-12">Meet the Team</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                <div className="flex flex-wrap justify-center gap-8 max-w-6xl mx-auto">
                     {teamMembers.map((member, index) => (
                         <Link 
                             to="/about" 
                             key={index} 
-                            className="block bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-sm text-center hover:shadow-lg hover:scale-105 transition-all duration-300 ease-in-out"
+                            className="block w-full sm:w-72 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-sm text-center hover:shadow-lg hover:scale-105 transition-all duration-300 ease-in-out"
                         >
                             {/* Use img tag with provided source */}
                              <img 
