@@ -2,6 +2,13 @@
     "configurations": [
         {
             "type": "java",
+            "name": "AudioscholarApplication",
+            "request": "launch",
+            "mainClass": "edu.cit.audioscholar.AudioscholarApplication",
+            "projectName": ""
+        },
+        {
+            "type": "java",
             "name": "Spring Boot-AudioscholarApplication<audioscholar>",
             "request": "launch",
             "cwd": "${workspaceFolder}",

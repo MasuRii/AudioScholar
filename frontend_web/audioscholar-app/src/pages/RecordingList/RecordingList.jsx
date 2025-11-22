@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
 import { Header } from '../Home/HomePage';
 
-const TERMINAL_STATUSES = ['COMPLETE', 'COMPLETED', 'FAILED', 'PROCESSING_HALTED_UNSUITABLE_CONTENT', 'PROCESSING_HALTED_NO_SPEECH'];
+const TERMINAL_STATUSES = ['COMPLETE', 'COMPLETED', 'FAILED', 'PROCESSING_HALTED_UNSUITABLE_CONTENT', 'PROCESSING_HALTED_NO_SPEECH', 'SUMMARY_FAILED'];
 const UPLOADING_STATUSES = ['UPLOAD_PENDING', 'UPLOAD_IN_PROGRESS', 'UPLOADING_TO_STORAGE', 'UPLOADED'];
 const UPLOAD_TIMEOUT_SECONDS = 10 * 60;
 
@@ -268,6 +268,8 @@ const RecordingList = () => {
         return new Date(timestamp.seconds * 1000).toLocaleDateString();
     };
 
+
+    
     const getStatusBadge = (recording) => {
         const { status, failureReason, uploadTimestamp } = recording;
         const originalStatus = status;
@@ -278,6 +280,8 @@ const RecordingList = () => {
         let displayStatus = 'Unknown';
         let isSpinning = false;
         let titleText = '';
+
+        
 
         const isUploadingOrPending = UPLOADING_STATUSES.includes(statusUpper);
         const elapsedSeconds = uploadTimestamp?.seconds
@@ -336,6 +340,13 @@ const RecordingList = () => {
                     Icon = FiAlertTriangle;
                     displayStatus = 'Failed';
                     break;
+                case 'SUMMARY_FAILED':
+                bgColor = 'bg-red-100';
+                textColor = 'text-red-800';
+                Icon = FiAlertTriangle;
+                displayStatus = 'Summary Failed';
+                break;
+                
                 default:
                     displayStatus = 'Unknown';
                     if (statusUpper !== 'UNKNOWN') {
