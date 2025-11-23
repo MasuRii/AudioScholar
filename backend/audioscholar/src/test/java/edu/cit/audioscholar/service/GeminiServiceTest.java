@@ -13,11 +13,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import edu.cit.audioscholar.model.KeyProvider;
 
 /**
  * Unit tests for GeminiService focusing on exponential backoff and model
@@ -29,6 +32,9 @@ class GeminiServiceTest {
 
 	@Mock
 	private RestTemplate restTemplate;
+
+	@Mock
+	private KeyRotationManager keyRotationManager;
 
 	@InjectMocks
 	private GeminiService geminiService;
@@ -43,7 +49,6 @@ class GeminiServiceTest {
 	@BeforeEach
 	void setUp() {
 		// Set test configuration values
-		ReflectionTestUtils.setField(geminiService, "apiKey", API_KEY);
 		ReflectionTestUtils.setField(geminiService, "maxRetryAttempts", 3);
 		ReflectionTestUtils.setField(geminiService, "baseRetryDelayMs", 1000L);
 		ReflectionTestUtils.setField(geminiService, "maxRetryDelayMs", 30000L);
@@ -53,6 +58,7 @@ class GeminiServiceTest {
 				"gemini-2.5-pro,gemini-flash-latest,gemini-2.5-flash");
 		ReflectionTestUtils.setField(geminiService, "transcriptionModelName", "gemini-2.0-flash");
 		ReflectionTestUtils.setField(geminiService, "summarizationModelName", "gemini-2.5-flash");
+		when(keyRotationManager.getKey(any(KeyProvider.class))).thenReturn(API_KEY);
 	}
 
 	// ==================== SUCCESS SCENARIOS ====================
@@ -198,6 +204,8 @@ class GeminiServiceTest {
 				+ "                    }" + "                ]" + "            }" + "        }" + "    ]" + "}";
 	}
 
+	private int callSequence = 0;
+
 	@Test
 	void testGenerateTranscriptOnlySummary_Success() throws InterruptedException {
 		// Given
@@ -250,6 +258,32 @@ class GeminiServiceTest {
 		assertTrue(endTime - startTime >= 1000, "Should have retry delay");
 	}
 
-	// Helper to track call counts for more flexible mocking
-	private int callSequence = 0;
+	@Test
+	void testKeyRotationOnRateLimitError() {
+		// Given
+		String expectedText = "{\"summaryText\": \"Test summary\", \"keyPoints\": [\"Point 1\", \"Point 2\"], \"topics\": [\"Topic 1\"], \"glossary\": []}";
+		ResponseEntity<String> successResponse = new ResponseEntity<>(createFullApiResponse(), HttpStatus.OK);
+
+		// Setup key rotation: first key fails, second succeeds
+		when(keyRotationManager.getKey(KeyProvider.GEMINI)).thenReturn("key1", "key2");
+
+		// Mock RestTemplate: first call throws 429, second succeeds
+		when(restTemplate.exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(), eq(String.class)))
+				.thenThrow(new HttpClientErrorException(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"))
+				.thenReturn(successResponse);
+
+		// When
+		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
+
+		// Then
+		assertEquals(expectedText, result);
+
+		// Verify key rotation was triggered
+		verify(keyRotationManager, times(2)).getKey(KeyProvider.GEMINI);
+		verify(keyRotationManager, times(1)).reportError(KeyProvider.GEMINI, "key1", 429);
+
+		// Verify RestTemplate was called twice (initial attempt + retry)
+		verify(restTemplate, times(2)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
+				eq(String.class));
+	}
 }

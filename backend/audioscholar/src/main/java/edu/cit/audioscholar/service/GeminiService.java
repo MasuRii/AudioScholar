@@ -39,6 +39,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import edu.cit.audioscholar.model.KeyProvider;
+
 @Service
 public class GeminiService {
 	private static final Logger log = LoggerFactory.getLogger(GeminiService.class);
@@ -93,10 +95,12 @@ public class GeminiService {
 	private static final int MAX_OUTPUT_TOKENS_SUMMARIZATION = 65536;
 
 	private final RestTemplate restTemplate;
+	private final KeyRotationManager keyRotationManager;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
-	public GeminiService(RestTemplate restTemplate) {
+	public GeminiService(RestTemplate restTemplate, KeyRotationManager keyRotationManager) {
 		this.restTemplate = restTemplate;
+		this.keyRotationManager = keyRotationManager;
 	}
 
 	/**
@@ -156,6 +160,7 @@ public class GeminiService {
 			retryAttempts = 0;
 
 			while (retryAttempts < maxRetryAttempts && totalAttempts < maxTotalAttempts) {
+				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
 				try {
 					totalAttempts++;
 					retryAttempts++;
@@ -163,7 +168,9 @@ public class GeminiService {
 					log.info("{} attempt {}/{} with model {} (total attempt {}/{})", operationName, retryAttempts,
 							maxRetryAttempts, currentModel, totalAttempts, maxTotalAttempts);
 
-					return operation.execute(currentModel);
+					T result = operation.execute(currentModel, currentKey);
+					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
+					return result;
 
 				} catch (Exception e) {
 					String errorType = e.getClass().getSimpleName();
@@ -171,7 +178,12 @@ public class GeminiService {
 
 					if (e instanceof HttpStatusCodeException) {
 						HttpStatusCodeException hse = (HttpStatusCodeException) e;
-						statusInfo = String.format(" (HTTP %d)", hse.getStatusCode().value());
+						int statusCode = hse.getStatusCode().value();
+						statusInfo = String.format(" (HTTP %d)", statusCode);
+
+						if (statusCode == 429 || statusCode == 403) {
+							keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+						}
 					}
 
 					if (isTransientError(e) && retryAttempts < maxRetryAttempts) {
@@ -216,7 +228,7 @@ public class GeminiService {
 	public String callGeminiSummarizationAPIWithFallback(String promptText, String transcriptText) {
 		try {
 			return executeWithEnhancedRetry(
-					(model) -> callGeminiSummarizationAPISingleModel(promptText, transcriptText, model),
+					(model, key) -> callGeminiSummarizationAPISingleModel(promptText, transcriptText, model, key),
 					"Summarization API", summarizationModelName);
 		} catch (EnhancedGeminiException e) {
 			log.error("Enhanced summarization API failed: {}", e.getMessage());
@@ -231,8 +243,8 @@ public class GeminiService {
 	/**
 	 * Single model call for summarization
 	 */
-	private String callGeminiSummarizationAPISingleModel(String promptText, String transcriptText, String modelName)
-			throws Exception {
+	private String callGeminiSummarizationAPISingleModel(String promptText, String transcriptText, String modelName,
+			String currentApiKey) throws Exception {
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -273,7 +285,7 @@ public class GeminiService {
 		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
 		String summarizationUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-				.queryParam("key", apiKey).buildAndExpand(modelName).toUriString();
+				.queryParam("key", currentApiKey).buildAndExpand(modelName).toUriString();
 
 		log.info("Calling Gemini Summarization API (Model: {}, JSON Schema Mode)", modelName);
 		log.trace("Summarization prompt text length: {}", updatedPromptText.length());
@@ -315,10 +327,12 @@ public class GeminiService {
 		String displayName = fileName;
 
 		try {
-			String fileUri = uploadFile(audioFilePath, mimeType, fileSize, displayName);
+			String uploadKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+			String fileUri = uploadFile(audioFilePath, mimeType, fileSize, displayName, uploadKey);
 			log.info("File uploaded successfully. URI: {}", fileUri);
 
-			return executeWithEnhancedRetry((model) -> callGeminiTranscriptionAPISingleModel(fileUri, mimeType, model),
+			return executeWithEnhancedRetry(
+					(model, key) -> callGeminiTranscriptionAPISingleModel(fileUri, mimeType, model, key),
 					"Transcription API", transcriptionModelName);
 
 		} catch (IOException e) {
@@ -337,7 +351,8 @@ public class GeminiService {
 	/**
 	 * Single model call for transcription
 	 */
-	private String callGeminiTranscriptionAPISingleModel(String fileUri, String mimeType, String modelName) {
+	private String callGeminiTranscriptionAPISingleModel(String fileUri, String mimeType, String modelName,
+			String currentApiKey) {
 		HttpHeaders generateHeaders = new HttpHeaders();
 		generateHeaders.setContentType(MediaType.APPLICATION_JSON);
 
@@ -362,7 +377,7 @@ public class GeminiService {
 		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
 
 		String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-				.queryParam("key", apiKey).buildAndExpand(modelName).toUriString();
+				.queryParam("key", currentApiKey).buildAndExpand(modelName).toUriString();
 
 		log.info("Calling Gemini Transcription API (Model: {}) using file URI: {}", modelName, fileUri);
 
@@ -425,7 +440,7 @@ public class GeminiService {
 
 	@FunctionalInterface
 	private interface RetryableOperation<T> {
-		T execute(String modelName) throws Exception;
+		T execute(String modelName, String apiKey) throws Exception;
 	}
 
 	private static class EnhancedGeminiException extends Exception {
@@ -519,7 +534,8 @@ public class GeminiService {
 		String displayName = fileName;
 
 		try {
-			String fileUri = uploadFile(audioFilePath, mimeType, fileSize, displayName);
+			String uploadKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+			String fileUri = uploadFile(audioFilePath, mimeType, fileSize, displayName, uploadKey);
 			log.info("File uploaded successfully. URI: {}", fileUri);
 
 			HttpHeaders generateHeaders = new HttpHeaders();
@@ -545,16 +561,18 @@ public class GeminiService {
 
 			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
 
-			String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-					.queryParam("key", apiKey).buildAndExpand(TRANSCRIPTION_MODEL_NAME).toUriString();
-
 			log.info("Calling Gemini Transcription API (Model: {}) using file URI: {}", TRANSCRIPTION_MODEL_NAME,
 					fileUri);
 
 			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+						.queryParam("key", currentKey).buildAndExpand(TRANSCRIPTION_MODEL_NAME).toUriString();
+
 				try {
 					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
 							requestEntity, String.class);
+					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
 					log.info(
 							"Gemini Transcription API (generateContent) call successful on attempt {} using model {}. Status: {}",
 							attempt, TRANSCRIPTION_MODEL_NAME, response.getStatusCode());
@@ -622,6 +640,10 @@ public class GeminiService {
 					}
 					sleepForRetry(attempt);
 				} catch (HttpClientErrorException e) {
+					int statusCode = e.getStatusCode().value();
+					if (statusCode == 429 || statusCode == 403) {
+						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+					}
 					log.error("Gemini Transcription API (generateContent) client error: {} - {}", e.getStatusCode(),
 							e.getResponseBodyAsString(), e);
 					String details = parseErrorDetails(e);
@@ -652,7 +674,7 @@ public class GeminiService {
 		}
 	}
 
-	private String uploadFile(Path filePath, String mimeType, long fileSize, String displayName)
+	private String uploadFile(Path filePath, String mimeType, long fileSize, String displayName, String apiKey)
 			throws IOException, ApiException {
 		String initiateUrl = UriComponentsBuilder.fromUriString(FILES_API_BASE_URL + FILES_API_UPLOAD_PATH)
 				.queryParam("key", apiKey).toUriString();
@@ -774,17 +796,18 @@ public class GeminiService {
 
 		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
-		String summarizationUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-				.queryParam("key", apiKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
 		log.info("Calling Gemini Summarization API (Model: {}, JSON Schema Mode)", SUMMARIZATION_MODEL_NAME);
 		log.trace("Summarization prompt text length: {}", updatedPromptText.length());
 		log.trace("Summarization transcript text length: {}", transcriptText.length());
 
 		for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+			String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+			String summarizationUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+					.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
 			try {
 				ResponseEntity<String> response = restTemplate.exchange(summarizationUrl, HttpMethod.POST,
 						requestEntity, String.class);
+				keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
 				log.info("Gemini Summarization API call successful on attempt {} using model {}. Status: {}", attempt,
 						SUMMARIZATION_MODEL_NAME, response.getStatusCode());
 
@@ -817,6 +840,10 @@ public class GeminiService {
 				}
 				sleepForRetry(attempt);
 			} catch (HttpClientErrorException e) {
+				int statusCode = e.getStatusCode().value();
+				if (statusCode == 429 || statusCode == 403) {
+					keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+				}
 				log.error("Gemini Summarization API client error: {} - {}", e.getStatusCode(),
 						e.getResponseBodyAsString(), e);
 				String details = parseErrorDetails(e);
@@ -859,7 +886,8 @@ public class GeminiService {
 			String pdfDisplayName = "context_" + metadataId + ".pdf";
 			log.info("[{}] Uploading PDF ({}) to Google Files API...", metadataId, pdfDisplayName);
 
-			pdfFileUri = uploadFile(pdfFilePath, "application/pdf", pdfSize, pdfDisplayName);
+			String uploadKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+			pdfFileUri = uploadFile(pdfFilePath, "application/pdf", pdfSize, pdfDisplayName, uploadKey);
 			log.info("[{}] PDF uploaded successfully to Google Files API. URI: {}", metadataId, pdfFileUri);
 
 			HttpHeaders generateHeaders = new HttpHeaders();
@@ -895,16 +923,18 @@ public class GeminiService {
 
 			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
 
-			String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-					.queryParam("key", apiKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
 			log.info("[{}] Calling Gemini Summarization API (Model: {}) with transcript and PDF context (URI: {})...",
 					metadataId, SUMMARIZATION_MODEL_NAME, pdfFileUri);
 
 			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+						.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
+
 				try {
 					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
 							requestEntity, String.class);
+					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
 					log.info(
 							"[{}] Gemini Summarization API (generateContent with PDF) call successful on attempt {}. Status: {}",
 							metadataId, attempt, response.getStatusCode());
@@ -951,6 +981,10 @@ public class GeminiService {
 					}
 					sleepForRetry(attempt);
 				} catch (HttpClientErrorException e) {
+					int statusCode = e.getStatusCode().value();
+					if (statusCode == 429 || statusCode == 403) {
+						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+					}
 					log.error("[{}] Gemini Summarization API (with PDF) client error: {} - {}", metadataId,
 							e.getStatusCode(), e.getResponseBodyAsString(), e);
 					String details = parseErrorDetails(e);
@@ -1039,17 +1073,19 @@ public class GeminiService {
 
 			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
 
-			String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-					.queryParam("key", apiKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
 			log.info(
 					"[{}] Calling Gemini Summarization API (Model: {}) with transcript and direct PDF context (URI: {})...",
 					metadataId, SUMMARIZATION_MODEL_NAME, googleFileUri);
 
 			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+						.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
+
 				try {
 					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
 							requestEntity, String.class);
+					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
 					log.info(
 							"[{}] Gemini Summarization API (generateContent with direct PDF) call successful on attempt {}. Status: {}",
 							metadataId, attempt, response.getStatusCode());
@@ -1096,6 +1132,10 @@ public class GeminiService {
 					}
 					sleepForRetry(attempt);
 				} catch (HttpClientErrorException e) {
+					int statusCode = e.getStatusCode().value();
+					if (statusCode == 429 || statusCode == 403) {
+						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+					}
 					log.error("[{}] Gemini Summarization API (with direct PDF) client error: {} - {}", metadataId,
 							e.getStatusCode(), e.getResponseBodyAsString(), e);
 					String details = parseErrorDetails(e);
@@ -1233,15 +1273,17 @@ public class GeminiService {
 
 		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
 
-		String simpleTextUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-				.queryParam("key", apiKey).buildAndExpand(TRANSCRIPTION_MODEL_NAME).toUriString();
-
 		log.info("Calling Gemini Simple Text API (Model: {})", TRANSCRIPTION_MODEL_NAME);
 
 		for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+			String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+			String simpleTextUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+					.queryParam("key", currentKey).buildAndExpand(TRANSCRIPTION_MODEL_NAME).toUriString();
+
 			try {
 				ResponseEntity<String> response = restTemplate.exchange(simpleTextUrl, HttpMethod.POST, requestEntity,
 						String.class);
+				keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
 				log.info("Gemini Simple Text API call successful on attempt {} using model {}. Status: {}", attempt,
 						TRANSCRIPTION_MODEL_NAME, response.getStatusCode());
 
@@ -1273,6 +1315,10 @@ public class GeminiService {
 				}
 				sleepForRetry(attempt);
 			} catch (HttpClientErrorException e) {
+				int statusCode = e.getStatusCode().value();
+				if (statusCode == 429 || statusCode == 403) {
+					keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+				}
 				log.error("Gemini Simple Text API client error: {} - {}", e.getStatusCode(),
 						e.getResponseBodyAsString(), e);
 				String details = parseErrorDetails(e);
@@ -1377,16 +1423,18 @@ public class GeminiService {
 
 			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
 
-			String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-					.queryParam("key", apiKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
 			log.info("[{}] Calling Gemini Summarization API (Model: {}) for transcript-only summary...", metadataId,
 					SUMMARIZATION_MODEL_NAME);
 
 			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+						.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
+
 				try {
 					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
 							requestEntity, String.class);
+					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
 					log.info(
 							"[{}] Gemini Summarization API call for transcript-only summary successful on attempt {}. Status: {}",
 							metadataId, attempt, response.getStatusCode());
@@ -1436,6 +1484,10 @@ public class GeminiService {
 					}
 					sleepForRetry(attempt);
 				} catch (HttpClientErrorException e) {
+					int statusCode = e.getStatusCode().value();
+					if (statusCode == 429 || statusCode == 403) {
+						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+					}
 					log.error("[{}] Gemini Summarization API client error: {} - {}", metadataId, e.getStatusCode(),
 							e.getResponseBodyAsString(), e);
 					String details = parseErrorDetails(e);
@@ -1524,16 +1576,18 @@ public class GeminiService {
 
 			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
 
-			String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-					.queryParam("key", apiKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
 			log.info("[{}] Calling Gemini API (Model: {}) for audio-only recommendations with schema...", metadataId,
 					SUMMARIZATION_MODEL_NAME);
 
 			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+						.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
+
 				try {
 					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
 							requestEntity, String.class);
+					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
 					log.info("[{}] Gemini API call for audio-only recommendations successful on attempt {}. Status: {}",
 							metadataId, attempt, response.getStatusCode());
 
@@ -1581,6 +1635,10 @@ public class GeminiService {
 					}
 					sleepForRetry(attempt);
 				} catch (HttpClientErrorException e) {
+					int statusCode = e.getStatusCode().value();
+					if (statusCode == 429 || statusCode == 403) {
+						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
+					}
 					log.error("[{}] Gemini API client error: {} - {}", metadataId, e.getStatusCode(),
 							e.getResponseBodyAsString(), e);
 					String details = parseErrorDetails(e);
