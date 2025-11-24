@@ -178,6 +178,10 @@ const Uploading = () => {
       setError('Please select an audio file first');
       return;
     }
+    if (!selectedPptxFile) {
+      setError('Please select a PowerPoint file');
+      return;
+    }
     if (!title.trim()) {
        setError('Please enter a title for the recording.');
        return;
@@ -335,7 +339,7 @@ const Uploading = () => {
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1 font-semibold">PowerPoint File (Optional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1 font-semibold">PowerPoint File (Required)</label>
                <div
                  onClick={handlePptxClick}
                  className={`border-2 border-dashed border-gray-300 rounded-lg p-6 text-center transition-colors duration-200 ${loading ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:bg-gray-100 hover:border-teal-400'}`}
@@ -404,8 +408,8 @@ const Uploading = () => {
 
               <button
                 type="submit"
-                disabled={!selectedAudioFile || loading || !title.trim()}
-                className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 ease-in-out ${(!selectedAudioFile || loading || !title.trim()) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b] hover:shadow-md transform hover:-translate-y-0.5'}`}
+                disabled={!selectedAudioFile || !selectedPptxFile || loading || !title.trim()}
+                className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 ease-in-out ${(!selectedAudioFile || !selectedPptxFile || loading || !title.trim()) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b] hover:shadow-md transform hover:-translate-y-0.5'}`}
               >
                 {loading ? <><FiLoader className="animate-spin h-5 w-5" /> Uploading...</> : <><FiUpload className="h-5 w-5"/> Upload Recording</>}
               </button>

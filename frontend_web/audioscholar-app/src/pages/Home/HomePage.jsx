@@ -1,15 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { FiGrid, FiLogIn, FiLogOut, FiMic, FiUpload, FiUser, FiUserPlus, FiCheckCircle, FiYoutube, FiCloud, FiBriefcase } from 'react-icons/fi';
+import { FiGrid, FiLogIn, FiLogOut, FiMic, FiUpload, FiUser, FiUserPlus, FiCheckCircle, FiYoutube, FiCloud, FiBriefcase, FiChevronLeft, FiChevronRight, FiSun, FiMoon } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
+import { useTheme } from '../../context/ThemeContext';
 
 export const Header = () => {
     const navigate = useNavigate();
     const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const { theme, toggleTheme } = useTheme();
+    const [user, setUser] = useState(null);
 
     useEffect(() => {
         const token = localStorage.getItem('AuthToken');
         setIsAuthenticated(!!token);
+
+        if (token) {
+            fetch(`${API_BASE_URL}api/users/me`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to fetch user');
+                return res.json();
+            })
+            .then(data => {
+                setUser(data);
+            })
+            .catch(err => {
+                console.error("Failed to fetch user info for header:", err);
+            });
+        }
     }, []);
 
     const handleLogout = async () => {
@@ -20,6 +41,7 @@ export const Header = () => {
         localStorage.removeItem('AuthToken');
         localStorage.removeItem('userId');
         setIsAuthenticated(false);
+        setUser(null);
         navigate('/');
         console.log('Local logout complete, user redirected.');
 
@@ -62,6 +84,13 @@ export const Header = () => {
                     <span className="font-montserrat font-semibold font-bold text-[24px] leading-[32px] tracking-normal text-white">AudioScholar</span>
                 </Link>
                 <nav className="hidden md:flex items-center space-x-2">
+                    <button
+                        onClick={toggleTheme}
+                        className="p-2 rounded-full text-white hover:bg-white/10 transition-colors mr-2 focus:outline-none"
+                        aria-label="Toggle Dark Mode"
+                    >
+                        {theme === 'light' ? <FiMoon className="w-5 h-5" /> : <FiSun className="w-5 h-5" />}
+                    </button>
                     {isAuthenticated ? (
                         <>
                             <Link to="/dashboard" className="flex items-center gap-1.5 font-inter font-medium text-sm leading-5 tracking-tight text-white hover:text-indigo-600 hover:bg-white transition-all duration-200 px-3 py-1.5 rounded-md">
@@ -74,7 +103,17 @@ export const Header = () => {
                                 <FiUpload className="w-4 h-4" /> Upload
                             </Link>
                             <Link to="/profile" className="flex items-center gap-1.5 font-inter font-medium text-sm leading-5 tracking-tight text-white hover:text-indigo-600 hover:bg-white transition-all duration-200 px-3 py-1.5 rounded-md">
-                                <FiUser className="w-4 h-4" /> Profile
+                                {user && user.profileImageUrl ? (
+                                    <img 
+                                        src={user.profileImageUrl} 
+                                        alt="Profile" 
+                                        className="w-5 h-5 rounded-full object-cover border border-gray-300"
+                                        referrerPolicy="no-referrer"
+                                    />
+                                ) : (
+                                    <FiUser className="w-4 h-4" />
+                                )}
+                                <span>{user?.firstName || 'Profile'}</span>
                             </Link>
                             <button
                                 onClick={handleLogout}
@@ -142,8 +181,8 @@ const Features = () => {
         },
         {
             icon: <FiUpload className="w-6 h-6 text-purple-600" />,
-            title: "PowerPoint Context (Optional)",
-            description: "Optionally upload lecture slides to provide context, enhancing the accuracy and relevance of AI summaries."
+            title: "PowerPoint Context",
+            description: "Upload lecture slides to provide context, enhancing the accuracy and relevance of AI summaries."
         },
         {
             icon: <FiCloud className="w-6 h-6 text-blue-600" />,
@@ -181,46 +220,105 @@ const Features = () => {
     );
 };
 
+const testimonials = [
+    {
+        quote: "AudioScholar genuinely made my note-taking process efficient. I can actually pay attention in lectures now and trust I'll have great notes later!",
+        author: "Juan dela Cruz",
+        role: "Student, University of San Carlos (USC)"
+    },
+    {
+        quote: "The AI summaries are a lifesaver. Reviewing lectures used to take hours, but now it's much faster and I feel like I understand the material better.",
+        author: "Maria Santos",
+        role: "Student, Cebu Institute of Technology - University (CIT-U)"
+    },
+    {
+        quote: "Being able to record offline is crucial on campus. AudioScholar handles it perfectly, reducing my stress about missing important points.",
+        author: "Miguel Reyes",
+        role: "Student, University of Cebu (UC)"
+    },
+    {
+        quote: "I used to struggle with keeping up with the prof's pace. AudioScholar captures everything so I can just listen and engage.",
+        author: "Angela Lim",
+        role: "Student, University of the Philippines Cebu (UP Cebu)"
+    },
+    {
+        quote: "The structured summaries help me review for exams so much faster. Highly recommended for engineering students!",
+        author: "Rico Tan",
+        role: "Student, University of San Jose-Recoletos (USJ-R)"
+    }
+];
+
 const Testimonials = () => {
-    const testimonials = [
-        {
-            quote: "AudioScholar genuinely made my note-taking process efficient. I can actually pay attention in lectures now and trust I'll have great notes later!",
-            author: "Alex R.",
-            role: "University Student"
-        },
-        {
-            quote: "The AI summaries are a lifesaver. Reviewing lectures used to take hours, but now it's much faster and I feel like I understand the material better.",
-            author: "Samantha K.",
-            role: "College Student"
-        },
-        {
-            quote: "Being able to record offline is crucial on campus. AudioScholar handles it perfectly, reducing my stress about missing important points.",
-            author: "Mike T.",
-            role: "Postgraduate Student"
-        }
-    ];
+    const [currentIndex, setCurrentIndex] = useState(0);
+
+    const nextSlide = React.useCallback(() => {
+        setCurrentIndex((prevIndex) => (prevIndex + 1) % testimonials.length);
+    }, []);
+
+    const prevSlide = React.useCallback(() => {
+        setCurrentIndex((prevIndex) => (prevIndex - 1 + testimonials.length) % testimonials.length);
+    }, []);
+
+    useEffect(() => {
+        const timer = setInterval(nextSlide, 6000);
+        return () => clearInterval(timer);
+    }, [nextSlide]);
 
     return (
-        <section className="py-16 bg-white">
-            <div className="container mx-auto px-4">
+        <section className="py-16 bg-white relative">
+            <div className="container mx-auto px-4 max-w-4xl">
                 <h2 className="font-montserrat font-semibold text-[28px] leading-[36px] tracking-normal text-center text-gray-800 mb-12">Focus More, Study Smarter</h2>
-                <div className="grid md:grid-cols-3 gap-8">
-                    {testimonials.map((testimonial, index) => (
-                        <div key={index} className="bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-sm transform hover:scale-105 transition-transform duration-300">
-                            <div className="text-yellow-500 mb-4">
-                                {[...Array(5)].map((_, i) => (
-                                    <span key={i}>★</span>
-                                ))}
-                            </div>
-                            <p className="font-inter font-normal text-base leading-6 tracking-wide italic text-gray-700 mb-4">"{testimonial.quote}"</p>
-                            <div>
-                                <p className="text-gray-800 font-inter font-semibold text-sm leading-5 tracking-tight">
-                                    {testimonial.author}
-                                </p>
-                                <p className="font-inter font-normal text-xs leading-4 tracking-normal text-gray-500">{testimonial.role}</p>
-                            </div>
+                
+                <div className="relative bg-gray-50 p-8 rounded-xl border border-gray-200 shadow-sm min-h-[280px] flex flex-col justify-center items-center text-center transition-all duration-500 ease-in-out">
+                     {/* Chevron Left - Desktop */}
+                    <button 
+                        onClick={prevSlide}
+                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white p-2 rounded-full shadow-md hover:bg-gray-100 focus:outline-none z-10 hidden md:block text-teal-600 transition-colors"
+                        aria-label="Previous testimonial"
+                    >
+                         <FiChevronLeft className="w-6 h-6" />
+                    </button>
+
+                     {/* Content */}
+                    <div className="max-w-2xl px-4 animate-fade-in">
+                         <div className="text-yellow-500 mb-6 text-xl flex justify-center gap-1">
+                            {[...Array(5)].map((_, i) => (
+                                <span key={i}>★</span>
+                            ))}
                         </div>
-                    ))}
+                        <p className="font-inter font-normal text-lg leading-relaxed tracking-wide italic text-gray-700 mb-6">"{testimonials[currentIndex].quote}"</p>
+                        <div>
+                            <p className="text-gray-800 font-inter font-semibold text-base leading-6 tracking-tight">
+                                {testimonials[currentIndex].author}
+                            </p>
+                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-500">{testimonials[currentIndex].role}</p>
+                        </div>
+                    </div>
+
+                     {/* Chevron Right - Desktop */}
+                    <button 
+                        onClick={nextSlide}
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white p-2 rounded-full shadow-md hover:bg-gray-100 focus:outline-none z-10 hidden md:block text-teal-600 transition-colors"
+                        aria-label="Next testimonial"
+                    >
+                         <FiChevronRight className="w-6 h-6" />
+                    </button>
+                </div>
+
+                {/* Dots Indicator & Mobile Controls */}
+                <div className="flex justify-center items-center mt-8 gap-4">
+                     <button onClick={prevSlide} className="md:hidden bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200 transition-colors"><FiChevronLeft /></button>
+                    <div className="flex space-x-2">
+                        {testimonials.map((_, index) => (
+                            <button
+                                key={index}
+                                onClick={() => setCurrentIndex(index)}
+                                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${index === currentIndex ? 'bg-teal-600 w-4' : 'bg-gray-300 hover:bg-gray-400'}`}
+                                aria-label={`Go to testimonial ${index + 1}`}
+                            />
+                        ))}
+                    </div>
+                     <button onClick={nextSlide} className="md:hidden bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200 transition-colors"><FiChevronRight /></button>
                 </div>
             </div>
         </section>

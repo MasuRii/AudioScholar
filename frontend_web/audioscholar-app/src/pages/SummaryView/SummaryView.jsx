@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 //text
 const Summaryview = () => {
   const { recordingId } = useParams();
-  const navigate = useNavigate();
 
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(true);

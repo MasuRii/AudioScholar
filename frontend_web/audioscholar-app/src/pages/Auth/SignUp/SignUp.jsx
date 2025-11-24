@@ -64,7 +64,11 @@ const SignUp = () => {
       const user = userCredential.user;
 
       // Step 3: Send verification email
-      await sendEmailVerification(user);
+      const actionCodeSettings = {
+        url: `${window.location.origin}/email-verification`,
+        handleCodeInApp: true,
+      };
+      await sendEmailVerification(user, actionCodeSettings);
 
       setSuccessMessage('Sign up successful! A verification email has been sent to your address. Please verify your email before signing in.');
       setFirstName('');

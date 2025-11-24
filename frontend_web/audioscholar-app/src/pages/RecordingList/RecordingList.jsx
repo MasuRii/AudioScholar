@@ -1,6 +1,6 @@
 import axios from 'axios';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud, FiSearch } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
 import { Header } from '../Home/HomePage';
@@ -11,12 +11,16 @@ const UPLOAD_TIMEOUT_SECONDS = 10 * 60;
 
 const RecordingList = () => {
     const [recordings, setRecordings] = useState([]);
+    const [filteredRecordings, setFilteredRecordings] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
     const pollIntervalRef = useRef(null);
     const isMountedRef = useRef(true);
     const deletedIdsRef = useRef(new Set());
+
+    // ... (existing fetchRecordings, startPolling, useEffect, handleDelete, handleDeleteAllRecordings, formatDate, getStatusBadge code remains same until return)
 
     const fetchRecordings = useCallback(async () => {
         console.log("Fetching recordings...");
@@ -138,13 +142,17 @@ const RecordingList = () => {
 
         const cachedRecordings = localStorage.getItem('recording_list');
         if (cachedRecordings) {
-            setRecordings(JSON.parse(cachedRecordings));
+            const parsed = JSON.parse(cachedRecordings);
+            setRecordings(parsed);
+            setFilteredRecordings(parsed); // Initialize filtered
         }
 
         fetchRecordings().then(initialData => {
             if (initialData && isMountedRef.current) {
                 localStorage.setItem('recording_list', JSON.stringify(initialData));
                 setRecordings(initialData);
+                // Filter immediately
+                setFilteredRecordings(initialData);
                 startPolling(initialData);
             }
             if (isMountedRef.current) {
@@ -162,6 +170,17 @@ const RecordingList = () => {
         };
     }, [fetchRecordings, startPolling]);
 
+    // Update filtered recordings when search query or recordings change
+    useEffect(() => {
+        const lowerQuery = searchQuery.toLowerCase();
+        const filtered = recordings.filter(rec => 
+            (rec.title && rec.title.toLowerCase().includes(lowerQuery)) ||
+            (rec.description && rec.description.toLowerCase().includes(lowerQuery))
+        );
+        setFilteredRecordings(filtered);
+    }, [searchQuery, recordings]);
+
+
     const handleDelete = async (idToDelete) => {
         if (!window.confirm('Are you sure you want to delete this recording and its summary? This action cannot be undone.')) {
             return;
@@ -169,7 +188,8 @@ const RecordingList = () => {
 
         // Optimistic update
         deletedIdsRef.current.add(idToDelete);
-        setRecordings(prev => prev.filter(rec => rec.id !== idToDelete));
+        const updatedRecordings = recordings.filter(rec => rec.id !== idToDelete);
+        setRecordings(updatedRecordings);
 
         const token = localStorage.getItem('AuthToken');
         if (!token) {
@@ -252,9 +272,6 @@ const RecordingList = () => {
                     failedDeletions++;
                     const recordingId = result.status === 'fulfilled' ? result.value.id : (result.reason && result.reason.id);
                     console.error(`Failed to delete recording ${recordingId || 'unknown'} in background:`, result.status === 'rejected' ? result.reason : result.value.response);
-                    // If it failed, we theoretically should add it back, but for "delete all", 
-                    // dragging them back might be confusing if the user thinks they are gone.
-                    // We will leave them hidden unless the user refreshes the page.
                 }
             });
             console.log(`Background deletion complete. Success: ${successfulDeletions}, Failed: ${failedDeletions}`);
@@ -363,30 +380,83 @@ const RecordingList = () => {
         );
     };
 
+    const groupRecordings = (recs) => {
+        const groups = {
+            'Today': [],
+            'This Week': [],
+            'This Month': [],
+            'Older': []
+        };
+
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const oneWeekAgo = new Date(todayStart);
+        oneWeekAgo.setDate(todayStart.getDate() - 7);
+        const oneMonthAgo = new Date(todayStart);
+        oneMonthAgo.setMonth(todayStart.getMonth() - 1);
+
+        recs.forEach(rec => {
+            if (!rec.uploadTimestamp?.seconds) {
+                groups['Older'].push(rec);
+                return;
+            }
+            const date = new Date(rec.uploadTimestamp.seconds * 1000);
+            
+            if (date >= todayStart) {
+                groups['Today'].push(rec);
+            } else if (date >= oneWeekAgo) {
+                groups['This Week'].push(rec);
+            } else if (date >= oneMonthAgo) {
+                groups['This Month'].push(rec);
+            } else {
+                groups['Older'].push(rec);
+            }
+        });
+
+        return groups;
+    };
+
+    const groupedRecordings = groupRecordings(filteredRecordings);
+
     return (
         <>
             <Header />
-            <main className="flex-grow py-12 bg-gray-50">
+            <main className="flex-grow py-12 bg-gray-50 dark:bg-gray-900">
                 <title>AudioScholar - My Recordings</title>
                 <div className="container mx-auto px-4">
-                    <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-3xl font-bold text-gray-800">My Recordings</h1>
-                        {!loading && recordings.length > 0 && (
-                            <button
-                                onClick={handleDeleteAllRecordings}
-                                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition flex items-center"
-                                title="Delete All Recordings"
-                            >
-                                <FiTrash2 className="mr-2 h-4 w-4" />
-                                Delete All
-                            </button>
-                        )}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                        <h1 className="text-3xl font-bold text-gray-800 dark:text-white">My Recordings</h1>
+                        <div className="flex items-center gap-4 w-full md:w-auto">
+                             <div className="relative w-full md:w-64">
+                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <FiSearch className="text-gray-400" />
+                                </span>
+                                <input
+                                    type="text"
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                    placeholder="Search recordings..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+
+                            {!loading && recordings.length > 0 && (
+                                <button
+                                    onClick={handleDeleteAllRecordings}
+                                    className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition flex items-center whitespace-nowrap"
+                                    title="Delete All Recordings"
+                                >
+                                    <FiTrash2 className="mr-2 h-4 w-4" />
+                                    Delete All
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {loading && (
                         <div className="text-center py-10">
                             <FiLoader className="animate-spin h-8 w-8 mx-auto text-teal-600" />
-                            <p className="mt-2 text-gray-600">Loading recordings...</p>
+                            <p className="mt-2 text-gray-600 dark:text-gray-300">Loading recordings...</p>
                         </div>
                     )}
 
@@ -397,44 +467,59 @@ const RecordingList = () => {
                     )}
 
                     {!loading && recordings.length === 0 && !error && (
-                        <div className="text-center py-10 bg-white rounded-lg shadow p-6">
+                        <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                             <FiFile className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                            <p className="text-gray-600">You haven't uploaded any recordings yet.</p>
+                            <p className="text-gray-600 dark:text-gray-300">You haven't uploaded any recordings yet.</p>
                             <Link to="/upload" className="mt-4 inline-block bg-[#2D8A8A] hover:bg-[#236b6b] text-white font-medium py-2 px-5 rounded-md transition">
                                 Upload Your First Recording
                             </Link>
                         </div>
                     )}
 
-                    {!loading && recordings.length > 0 && (
-                        <div className="bg-white rounded-lg shadow overflow-hidden">
-                            <ul className="divide-y divide-gray-200">
-                                {recordings.map((recording) => (
-                                    <li key={recording.id} className="px-6 py-4 hover:bg-gray-50 transition duration-150 ease-in-out">
-                                        <div className="flex items-center justify-between flex-wrap gap-4">
-                                            <div className="flex-1 min-w-0">
-                                                <Link to={`/recordings/${recording.id}`} className="text-lg font-semibold text-teal-700 hover:text-teal-900 truncate block" title={recording.title}>
-                                                    {recording.title || 'Untitled Recording'}
-                                                </Link>
-                                                <p className="text-sm text-gray-500 mt-1">Uploaded: {formatDate(recording.uploadTimestamp)}</p>
-                                            </div>
-                                            <div className="flex items-center space-x-4 flex-shrink-0">
-                                                {getStatusBadge(recording)}
-                                                <Link to={`/recordings/${recording.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center" title="View Details">
-                                                    View Details <FiExternalLink className="ml-1 h-3 w-3" />
-                                                </Link>
-                                                <button
-                                                    onClick={() => handleDelete(recording.id)}
-                                                    className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-100 transition"
-                                                    title="Delete Recording"
-                                                >
-                                                    <FiTrash2 className="h-4 w-4" />
-                                                </button>
-                                            </div>
+                    {!loading && filteredRecordings.length === 0 && recordings.length > 0 && (
+                         <div className="text-center py-10">
+                            <p className="text-gray-600 dark:text-gray-300">No recordings found matching your search.</p>
+                        </div>
+                    )}
+
+                    {!loading && filteredRecordings.length > 0 && (
+                        <div className="space-y-8">
+                            {Object.entries(groupedRecordings).map(([group, groupRecordings]) => (
+                                groupRecordings.length > 0 && (
+                                    <div key={group}>
+                                        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4 ml-1">{group}</h2>
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                                            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                                                {groupRecordings.map((recording) => (
+                                                    <li key={recording.id} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-150 ease-in-out">
+                                                        <div className="flex items-center justify-between flex-wrap gap-4">
+                                                            <div className="flex-1 min-w-0">
+                                                                <Link to={`/recordings/${recording.id}`} className="text-lg font-semibold text-teal-700 hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-300 truncate block" title={recording.title}>
+                                                                    {recording.title || 'Untitled Recording'}
+                                                                </Link>
+                                                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Uploaded: {formatDate(recording.uploadTimestamp)}</p>
+                                                            </div>
+                                                            <div className="flex items-center space-x-4 flex-shrink-0">
+                                                                {getStatusBadge(recording)}
+                                                                <Link to={`/recordings/${recording.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium inline-flex items-center" title="View Details">
+                                                                    View Details <FiExternalLink className="ml-1 h-3 w-3" />
+                                                                </Link>
+                                                                <button
+                                                                    onClick={() => handleDelete(recording.id)}
+                                                                    className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition"
+                                                                    title="Delete Recording"
+                                                                >
+                                                                    <FiTrash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </div>
-                                    </li>
-                                ))}
-                            </ul>
+                                    </div>
+                                )
+                            ))}
                         </div>
                     )}
                 </div>

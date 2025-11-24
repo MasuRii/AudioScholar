@@ -25,7 +25,11 @@ const ForgotPassword = () => {
 
         setLoading(true);
         try {
-            await sendPasswordResetEmail(auth, email);
+            const actionCodeSettings = {
+                url: `${window.location.origin}/reset-password`,
+                handleCodeInApp: true,
+            };
+            await sendPasswordResetEmail(auth, email, actionCodeSettings);
             setSuccess(true);
         } catch (err) {
             console.error('Firebase password reset error:', err);
