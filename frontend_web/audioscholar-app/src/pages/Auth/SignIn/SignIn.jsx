@@ -2,7 +2,7 @@ import { getAuth, GoogleAuthProvider, sendEmailVerification, signInWithEmailAndP
 import React, { useState } from 'react';
 import { FaGithub } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
-import { FiBriefcase, FiCheckCircle, FiCloud, FiMic, FiUpload, FiYoutube } from 'react-icons/fi';
+import { FiBriefcase, FiCheckCircle, FiCloud, FiLoader, FiMic, FiUpload, FiYoutube } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
 import { verifyFirebaseTokenWithBackend, verifyGoogleTokenWithBackend } from '../../../services/authService';
@@ -80,6 +80,7 @@ const SignIn = () => {
                                 switch (err.code) {
                                         case 'auth/user-not-found':
                                         case 'auth/wrong-password':
+                                        case 'auth/invalid-credential':
                                         case 'auth/invalid-email':
                                                 errorMessage = 'Invalid email or password.';
                                                 break;
@@ -87,7 +88,7 @@ const SignIn = () => {
                                                 errorMessage = 'Too many attempts. Please try again later.';
                                                 break;
                                         default:
-                                                errorMessage = err.message;
+                                                errorMessage = 'An unexpected error occurred. Please try again.';
                                 }
                         }
                         setError(errorMessage);
@@ -249,7 +250,7 @@ const SignIn = () => {
                                                                                 {( () => {
                                                                                         const FeatureIcon1 = signInFeatures[currentFeatureIndex].icon;
                                                                                         return (
-                                                                                                <div key={`feature-card-1-${currentFeatureIndex}`} className="bg-black bg-opacity-25 p-5 rounded-xl shadow-lg w-full min-h-[150px] flex items-start transition-opacity duration-300 ease-in-out">
+                                                                                                <div key={`feature-card-1-${currentFeatureIndex}`} className="bg-slate-900 bg-opacity-60 p-5 rounded-xl shadow-lg w-full min-h-[150px] flex items-start transition-opacity duration-300 ease-in-out">
                                                                                                         <div className="w-11 h-11 bg-teal-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
                                                                                                                 <FeatureIcon1 className="w-5 h-5 text-white" />
                                                                                                         </div>
@@ -266,7 +267,7 @@ const SignIn = () => {
                                                                                         const secondIndex = (currentFeatureIndex + 1) % signInFeatures.length;
                                                                                         const FeatureIcon2 = signInFeatures[secondIndex].icon;
                                                                                         return (
-                                                                                                <div key={`feature-card-2-${currentFeatureIndex}`} className="bg-black bg-opacity-25 p-5 rounded-xl shadow-lg w-full min-h-[150px] flex items-start transition-opacity duration-300 ease-in-out">
+                                                                                                <div key={`feature-card-2-${currentFeatureIndex}`} className="bg-slate-900 bg-opacity-60 p-5 rounded-xl shadow-lg w-full min-h-[150px] flex items-start transition-opacity duration-300 ease-in-out">
                                                                                                         <div className="w-11 h-11 bg-teal-500 rounded-lg flex items-center justify-center mr-4 flex-shrink-0">
                                                                                                                 <FeatureIcon2 className="w-5 h-5 text-white" />
                                                                                                         </div>
@@ -295,13 +296,13 @@ const SignIn = () => {
                                                                                                                                                                 <div className="flex justify-between">
                                                                                                                                                                         <button
                                                                                                                                                                                 onClick={handlePrevFeature}
-                                                                                                                                                                                className="px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition"
+                                                                                                                                                                                className="px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition shadow-md font-medium z-10 relative"
                                                                                                                                                                         >
                                                                                                                                                                                 Previous
                                                                                                                                                                         </button>
                                                                                                                                                                         <button
                                                                                                                                                                                 onClick={handleNextFeature}
-                                                                                                                                                                                className="px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition"
+                                                                                                                                                                                className="px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition shadow-md font-medium z-10 relative"
                                                                                                                                                                         >
                                                                                                                                                                                 Next
                                                                                                                                                                         </button>
@@ -320,11 +321,15 @@ const SignIn = () => {
                                                         <div className="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                                                                 <button
                                                                         onClick={handleGoogleSignIn}
-                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105"
+                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105 relative"
                                                                         disabled={loading}
                                                                 >
-                                                                        <FcGoogle className="w-5 h-5" />
-                                                                        <span className="text-sm font-medium text-gray-700">Sign in with Google</span>
+                                                                        {loading ? (
+                                                                                <FiLoader className="w-5 h-5 animate-spin text-gray-500" />
+                                                                        ) : (
+                                                                                <FcGoogle className="w-5 h-5" />
+                                                                        )}
+                                                                        <span className="text-sm font-medium text-gray-700">{loading ? 'Processing...' : 'Sign in with Google'}</span>
                                                                 </button>
                                                                 <button
                                                                         onClick={handleGithubSignIn}
