@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
+import edu.cit.audioscholar.BuildConfig
 import edu.cit.audioscholar.data.remote.dto.FirebaseTokenRequest
 import edu.cit.audioscholar.data.remote.dto.RegistrationRequest
 import edu.cit.audioscholar.domain.repository.AuthRepository
@@ -93,7 +94,7 @@ class RegistrationViewModel @Inject constructor(
         private const val KEY_GITHUB_AUTH_STATE = "github_auth_state"
         const val KEY_AUTH_TOKEN = "auth_token"
         private const val TAG = "RegistrationViewModel"
-        private const val GITHUB_CLIENT_ID = "Iv23liMzUNGL8JuXu40i"
+        private const val GITHUB_CLIENT_ID = BuildConfig.GITHUB_CLIENT_ID
         const val GITHUB_REDIRECT_URI_SCHEME = "audioscholar"
         const val GITHUB_REDIRECT_URI_HOST = "github-callback"
         private const val GITHUB_REDIRECT_URI = "$GITHUB_REDIRECT_URI_SCHEME://$GITHUB_REDIRECT_URI_HOST"
@@ -199,7 +200,7 @@ class RegistrationViewModel @Inject constructor(
             when (val result = authRepository.registerUser(request)) {
                 is Resource.Success -> {
                     Log.i(TAG, "[Email/Pass] Registration successful via API.")
-                    _registrationScreenEventFlow.emit(RegistrationScreenEvent.ShowMessage("Registration successful! Redirecting to login..."))
+                    _registrationScreenEventFlow.emit(RegistrationScreenEvent.ShowMessage("Registration successful! Please verify your email."))
                     delay(1000)
 
                     _uiState.update {

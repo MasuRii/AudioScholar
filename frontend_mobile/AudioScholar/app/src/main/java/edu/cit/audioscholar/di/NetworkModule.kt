@@ -11,6 +11,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import edu.cit.audioscholar.BuildConfig
 import edu.cit.audioscholar.data.local.UserDataStore
 import edu.cit.audioscholar.data.local.file.RecordingFileHandler
 import edu.cit.audioscholar.data.remote.service.ApiService
@@ -70,7 +71,7 @@ class TimeoutInterceptor @Inject constructor() : Interceptor {
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val PRIMARY_BASE_URL = "http://192.168.137.1:8080/"
+    private const val PRIMARY_BASE_URL = BuildConfig.BASE_URL
     private const val FALLBACK_URL_1 = "http://192.168.137.1:8080/"
     private const val FALLBACK_URL_2 = "http://192.168.137.1:8080/"
 
@@ -288,9 +289,11 @@ object NetworkModule {
         apiService: ApiService,
         application: Application,
         gson: Gson,
-        userDataStore: UserDataStore
+        userDataStore: UserDataStore,
+        firebaseAuth: FirebaseAuth,
+        prefs: SharedPreferences
     ): AuthRepository {
-        return AuthRepositoryImpl(apiService, application, gson, userDataStore)
+        return AuthRepositoryImpl(apiService, application, gson, userDataStore, firebaseAuth, prefs)
     }
 
     @Provides

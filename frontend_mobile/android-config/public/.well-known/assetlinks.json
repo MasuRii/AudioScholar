@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "edu.cit.audioscholar",
+    "sha256_cert_fingerprints": [
+      "7C:2E:A0:1C:23:39:23:E2:B0:F0:D6:F3:D7:DA:E4:9F:65:5B:3B:82:CD:04:1B:38:2A:87:90:B2:0A:9B:7E:7F"
+    ]
+  }
+}]

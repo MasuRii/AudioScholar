@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AudioScholar</string>
 
@@ -102,10 +103,10 @@
 
     <string name="cd_user_avatar">User avatar</string>
     <string name="cd_app_logo">App logo</string>
-    <string name="drawer_header_user_name">testingdev</string>
-    <string name="drawer_header_user_email">testingdev@gmail.com</string>
+    <string name="drawer_header_user_name">User Name</string>
+    <string name="drawer_header_user_email">user@example.com</string>
     <string name="placeholder_username">User Name</string>
-    <string name="placeholder_email">testingdev@egmail.com</string>
+    <string name="placeholder_email">user@example.com</string>
     <string name="desc_user_avatar">User avatar</string>
     <string name="dialog_logout_title">Log Out?</string>
     <string name="dialog_logout_message">Are you sure you want to log out?</string>
@@ -149,7 +150,7 @@
     <string name="settings_password_validation_uppercase">At least 1 uppercase letter</string>
     <string name="settings_password_validation_lowercase">At least 1 lowercase letter</string>
     <string name="settings_password_validation_number">At least 1 number</string>
-    <string name="settings_password_validation_special">At least 1 special character (!@#$%^&amp;*())</string>
+    <string name="settings_password_validation_special">At least 1 special character (!@#$%%^&amp;*())</string>
     <string name="settings_password_validation_match">Passwords do not match</string>
     <string name="settings_password_validation_current_mock_error">Incorrect current password (Mock)</string>
     <string name="settings_password_change_success">Password changed successfully (Mock)</string>
@@ -166,6 +167,12 @@
     <string name="login_email_label">Email</string>
     <string name="login_password_label">Password</string>
     <string name="login_forgot_password">Forgot Password?</string>
+    <string name="forgot_password_title">Forgot Password</string>
+    <string name="forgot_password_instruction">Enter your email address and we\'ll send you a link to reset your password.</string>
+    <string name="forgot_password_email_label">Email Address</string>
+    <string name="forgot_password_send_button">Send Reset Link</string>
+    <string name="forgot_password_success">Reset link sent to your email.</string>
+    <string name="forgot_password_error_empty">Email cannot be empty.</string>
     <string name="login_button_text">Login</string>
     <string name="login_or_continue_with">Or continue with</string>
     <string name="login_no_account_prefix">Don\'t have an account?</string>
@@ -416,4 +423,47 @@
     <string name="premium_status_description">You have premium access to all features</string>
     <string name="premium_upgrade_button">Upgrade to Premium</string>
 
+    <string name="error_unexpected_default">An unexpected error occurred.</string>
+    <string name="error_reset_password_invalid_link">Invalid or missing password reset link.</string>
+    <string name="error_reset_password_missing_code">Missing reset code.</string>
+    <string name="error_fix_errors_before_submitting">Please fix the errors before submitting.</string>
+
+    <string name="login_error_empty_fields">Email and password cannot be empty.</string>
+    <string name="login_error_invalid_email">Please enter a valid email address.</string>
+    <string name="login_error_user_details">Login failed: Could not retrieve user details.</string>
+    <string name="login_error_auth_token">Login failed: Could not retrieve authentication token.</string>
+    <string name="login_error_missing_api_token">Login failed: Missing API token from server.</string>
+    <string name="login_error_server_validation">Login failed: Server validation error.</string>
+    <string name="login_error_invalid_credentials">Invalid email or password.</string>
+    <string name="login_error_account_disabled">This account has been disabled.</string>
+    <string name="login_error_generic">Login failed: %1$s</string>
+    <string name="login_error_google_signin">Google Sign-In failed or cancelled.</string>
+    <string name="login_error_github_code_missing">GitHub login failed: Authorization code missing.</string>
+    <string name="login_error_github_state_missing">GitHub login failed: Security check error (state missing)</string>
+    <string name="login_error_github_state_mismatch">GitHub login failed: Security check error (state mismatch).</string>
+    <string name="login_error_critical_verification">Critical error after login verification.</string>
+    <string name="login_error_github_browser">Could not open browser for GitHub login.</string>
+    <string name="login_provider_google">Google</string>
+    <string name="reset_password_success_message">Password reset successfully! Please login.</string>
+    <string name="reset_password_title">Set New Password</string>
+    <string name="reset_password_description">Please enter your new password below.</string>
+    <string name="button_submit">Submit</string>
+
+    <string name="settings_current_password_required">Current password is required</string>
+    <string name="settings_confirm_new_password_req">Please confirm your new password</string>
+    <string name="settings_new_password_same_as_current">New password cannot be the same as the current password.</string>
+    <string name="error_auth_required">Authentication error. Please log in again.</string>
+    <string name="error_password_update_failed">Failed to update password on server. Please try again.</string>
+    <string name="error_user_not_found_or_disabled">User account not found or disabled.</string>
+    <string name="error_reauth_failed">Re-authentication failed. Please try again later.</string>
+    <string name="login_provider_github">GitHub</string>
+    <string name="forgot_password_error_email_empty">Email cannot be empty.</string>
+    <string name="nav_email_verification">Verify Email</string>
+    <string name="email_verification_title">Verify your Email</string>
+    <string name="email_verification_instruction">We\'ve sent a verification link to %1$s. Please check your inbox and click the link to verify your account.</string>
+    <string name="email_verification_resend_button">Resend Verification Email</string>
+    <string name="email_verification_back_to_login">Back to Login</string>
+    <string name="email_verification_verified">Email verified successfully!</string>
+    <string name="email_verification_sent">Verification email sent.</string>
+    <string name="email_verification_check_button">I\'ve Verified My Email</string>
 </resources>

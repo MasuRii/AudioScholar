@@ -4,6 +4,8 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.EmailAuthProvider
+import com.google.firebase.auth.FirebaseAuth
 import dagger.hilt.android.lifecycle.HiltViewModel
 import edu.cit.audioscholar.domain.repository.AuthRepository
 import edu.cit.audioscholar.ui.auth.LoginViewModel
@@ -20,22 +22,30 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+sealed interface ProfileContentState {
+    data object Loading : ProfileContentState
+    data class Error(val message: String) : ProfileContentState
+    data class Success(
+        val name: String,
+        val email: String,
+        val profileImageUrl: String?,
+        val isPremium: Boolean,
+        val hasPasswordProvider: Boolean
+    ) : ProfileContentState
+}
+
 data class UserProfileUiState(
-    val isLoading: Boolean = false,
-    val isDataAvailable: Boolean = false,
-    val name: String = "",
-    val email: String = "",
-    val profileImageUrl: String? = null,
-    val isPremium: Boolean = false,
-    val errorMessage: String? = null,
-    val navigateToLogin: Boolean = false
+    val contentState: ProfileContentState = ProfileContentState.Loading,
+    val navigateToLogin: Boolean = false,
+    val userMessage: String? = null
 )
 
 @HiltViewModel
 class UserProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val prefs: SharedPreferences,
-    private val premiumStatusManager: PremiumStatusManager
+    private val premiumStatusManager: PremiumStatusManager,
+    private val firebaseAuth: FirebaseAuth
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(UserProfileUiState())
@@ -54,19 +64,16 @@ class UserProfileViewModel @Inject constructor(
             Log.d("UserProfileViewModel", "Starting to collect user profile flow.")
             authRepository.getUserProfile()
                 .onStart {
-                    Log.d("UserProfileViewModel", "Flow started, setting initial loading state if no data yet.")
-                    if (!_uiState.value.isDataAvailable) {
-                        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-                    } else {
-                        _uiState.update { it.copy(errorMessage = null) }
+                    Log.d("UserProfileViewModel", "Flow started.")
+                    if (_uiState.value.contentState !is ProfileContentState.Success) {
+                         _uiState.update { it.copy(contentState = ProfileContentState.Loading) }
                     }
                 }
                 .catch { e ->
                     Log.e("UserProfileViewModel", "Error collecting profile flow: ${e.message}", e)
                     _uiState.update {
                         it.copy(
-                            isLoading = false,
-                            errorMessage = "An unexpected error occurred: ${e.message}"
+                            contentState = ProfileContentState.Error("An unexpected error occurred: ${e.message}")
                         )
                     }
                 }
@@ -76,68 +83,68 @@ class UserProfileViewModel @Inject constructor(
                         is Resource.Success -> {
                             val profileData = result.data
                             if (profileData != null) {
-                                Log.i("UserProfileViewModel", "Profile loaded/updated: Name=${profileData.displayName}, Email=${profileData.email}")
-                                
+                                Log.i("UserProfileViewModel", "Profile loaded: ${profileData.displayName}")
                                 premiumStatusManager.updatePremiumStatus(profileData)
                                 val isPremium = premiumStatusManager.isPremiumUser()
-                                
+                                val hasPasswordProvider = firebaseAuth.currentUser?.providerData?.any {
+                                    it.providerId == EmailAuthProvider.PROVIDER_ID
+                                } ?: false
+
                                 _uiState.update {
                                     it.copy(
-                                        isLoading = false,
-                                        isDataAvailable = true,
-                                        name = profileData.displayName ?: "",
-                                        email = profileData.email ?: "",
-                                        profileImageUrl = profileData.profileImageUrl,
-                                        isPremium = isPremium,
-                                        errorMessage = null
+                                        contentState = ProfileContentState.Success(
+                                            name = profileData.displayName ?: "",
+                                            email = profileData.email ?: "",
+                                            profileImageUrl = profileData.profileImageUrl,
+                                            isPremium = isPremium,
+                                            hasPasswordProvider = hasPasswordProvider
+                                        )
                                     )
                                 }
                             } else {
-                                Log.w("UserProfileViewModel", "Profile fetch Resource.Success but data was null")
                                 _uiState.update {
-                                    it.copy(
-                                        isLoading = false,
-                                        errorMessage = it.errorMessage ?: "Failed to retrieve profile details."
-                                    )
+                                    it.copy(contentState = ProfileContentState.Error("Failed to retrieve profile details."))
                                 }
                             }
                         }
                         is Resource.Error -> {
-                            Log.e("UserProfileViewModel", "Error loading profile data: ${result.message}")
-                            _uiState.update {
-                                it.copy(
-                                    isLoading = false,
-                                    errorMessage = result.message ?: "Failed to retrieve profile details."
-                                )
+                            Log.e("UserProfileViewModel", "Error loading profile: ${result.message}")
+                            val current = _uiState.value.contentState
+                            if (current is ProfileContentState.Success) {
+                                _uiState.update { it.copy(userMessage = result.message ?: "Error updating profile") }
+                            } else {
+                                _uiState.update { 
+                                    it.copy(contentState = ProfileContentState.Error(result.message ?: "Failed to retrieve profile details.")) 
+                                }
                             }
                         }
                         is Resource.Loading -> {
-                            Log.d("UserProfileViewModel", "Profile loading in progress (Resource.Loading)...")
                             val cachedData = result.data
-                            if (cachedData != null && !_uiState.value.isDataAvailable) {
-                                Log.d("UserProfileViewModel", "Displaying cached data while loading network.")
-                                
+                            if (cachedData != null) {
                                 val isPremium = if (cachedData.roles?.contains("ROLE_PREMIUM") == true) {
                                     true
                                 } else {
                                     premiumStatusManager.isPremiumUser()
                                 }
-                                
+                                val hasPasswordProvider = firebaseAuth.currentUser?.providerData?.any {
+                                    it.providerId == EmailAuthProvider.PROVIDER_ID
+                                } ?: false
+
                                 _uiState.update {
                                     it.copy(
-                                        isLoading = true,
-                                        isDataAvailable = true,
-                                        name = cachedData.displayName ?: "",
-                                        email = cachedData.email ?: "",
-                                        profileImageUrl = cachedData.profileImageUrl,
-                                        isPremium = isPremium,
-                                        errorMessage = null
+                                        contentState = ProfileContentState.Success(
+                                            name = cachedData.displayName ?: "",
+                                            email = cachedData.email ?: "",
+                                            profileImageUrl = cachedData.profileImageUrl,
+                                            isPremium = isPremium,
+                                            hasPasswordProvider = hasPasswordProvider
+                                        )
                                     )
                                 }
-                            } else if (!_uiState.value.isDataAvailable) {
-                                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
                             } else {
-                                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                                if (_uiState.value.contentState !is ProfileContentState.Success) {
+                                    _uiState.update { it.copy(contentState = ProfileContentState.Loading) }
+                                }
                             }
                         }
                     }
@@ -147,40 +154,21 @@ class UserProfileViewModel @Inject constructor(
 
     fun logout() {
         viewModelScope.launch {
-            Log.d("UserProfileViewModel", "Logout initiated by user. Calling API.")
-
-            val result = authRepository.logout()
-
-            when (result) {
-                is Resource.Success -> {
-                    Log.i("UserProfileViewModel", "API logout successful.")
-                }
-                is Resource.Error -> {
-                    Log.w("UserProfileViewModel", "API logout failed: ${result.message}. Proceeding with local logout.")
-                }
-                is Resource.Loading -> {
-                }
-            }
-
-            Log.d("UserProfileViewModel", "Proceeding to clear local session data.")
+            authRepository.logout()
             clearSessionAndNavigateToLogin()
         }
     }
 
     private fun clearSessionAndNavigateToLogin() {
         viewModelScope.launch {
-            Log.d("UserProfileViewModel", "Clearing local user cache (DataStore).")
             authRepository.clearLocalUserCache()
-
             premiumStatusManager.clearPremiumStatus()
 
-            Log.d("UserProfileViewModel", "Clearing local session data (Prefs).")
             with(prefs.edit()) {
                 remove(LoginViewModel.KEY_AUTH_TOKEN)
                 putBoolean(SplashActivity.KEY_IS_LOGGED_IN, false)
                 apply()
             }
-            Log.d("UserProfileViewModel", "Auth token and login status cleared. Triggering navigation.")
             _uiState.update { UserProfileUiState(navigateToLogin = true) }
         }
     }
@@ -190,7 +178,7 @@ class UserProfileViewModel @Inject constructor(
     }
 
     fun consumeErrorMessage() {
-        _uiState.update { it.copy(errorMessage = null) }
+        _uiState.update { it.copy(userMessage = null) }
     }
 
     override fun onCleared() {

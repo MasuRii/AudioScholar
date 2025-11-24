@@ -33,7 +33,17 @@ interface AuthRepository {
 
     suspend fun changePassword(request: ChangePasswordRequest): SimpleResult
 
+    fun sendPasswordResetEmail(email: String): Flow<SimpleResult>
+
+    suspend fun applyActionCode(code: String): SimpleResult
+
+    suspend fun verifyPasswordResetCode(code: String): Resource<String>
+
+    suspend fun confirmPasswordReset(code: String, newPassword: String): SimpleResult
+
     suspend fun logout(): SimpleResult
+
+    fun saveAuthToken(token: String)
 
     suspend fun clearLocalUserCache()
 }

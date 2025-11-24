@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -30,6 +31,7 @@ import androidx.lifecycle.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.*
 import androidx.navigation.compose.*
+import com.google.firebase.auth.FirebaseAuth
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dagger.hilt.android.AndroidEntryPoint
@@ -52,6 +54,8 @@ import edu.cit.audioscholar.ui.settings.SettingsViewModel
 import edu.cit.audioscholar.ui.settings.ThemeSetting
 import edu.cit.audioscholar.ui.theme.AudioScholarTheme
 import edu.cit.audioscholar.util.Resource
+import edu.cit.audioscholar.domain.repository.AuthRepository
+import edu.cit.audioscholar.data.remote.dto.FirebaseTokenRequest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -79,7 +83,12 @@ sealed class Screen(val route: String, val labelResId: Int, val icon: ImageVecto
             "login?fromLogout=$fromLogout&isFirstLogin=$isFirstLogin"
     }
     object Registration : Screen("registration", R.string.nav_registration, Icons.Filled.PersonAdd)
+    object EmailVerification : Screen("email_verification", R.string.nav_email_verification, Icons.Filled.Email)
+    object ForgotPassword : Screen("forgot_password", R.string.forgot_password_title, Icons.Filled.Lock)
     object ChangePassword : Screen("change_password", R.string.nav_change_password, Icons.Filled.Password)
+    object ResetPasswordConfirm : Screen("reset_password_confirm?oobCode={oobCode}", R.string.nav_change_password, Icons.Filled.Lock) {
+        fun createRoute(code: String) = "reset_password_confirm?oobCode=$code"
+    }
     object SubscriptionPricing : Screen("subscription_pricing", R.string.nav_audioscholar_pro, Icons.Filled.School)
 
     companion object {
@@ -195,6 +204,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var prefs: SharedPreferences
 
+    @Inject
+    lateinit var authRepository: AuthRepository
+
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val loginViewModel: LoginViewModel by viewModels()
     private val mainViewModel: MainViewModel by viewModels()
@@ -218,7 +230,9 @@ class MainActivity : ComponentActivity() {
         Log.d("MainActivity", "onCreate called. Intent received: $intent")
         logIntentExtras("onCreate", intent)
 
-        handleGitHubRedirectIntent(intent, "onCreate")
+        if (!handleDeepLink(intent)) {
+            handleGitHubRedirectIntent(intent, "onCreate")
+        }
 
         val startDestination = intent?.getStringExtra(SplashActivity.EXTRA_START_DESTINATION)
             ?: run {
@@ -303,12 +317,170 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
 
         if (::navController.isInitialized) {
-            if (!handleGitHubRedirectIntent(intent, "onNewIntent")) {
-                handleNavigationIntent(intent, navController)
+            if (!handleDeepLink(intent)) {
+                if (!handleGitHubRedirectIntent(intent, "onNewIntent")) {
+                    handleNavigationIntent(intent, navController)
+                }
             }
         } else {
             Log.e("MainActivity", "onNewIntent called but navController not initialized yet.")
         }
+    }
+
+    private fun handleDeepLink(intent: Intent?): Boolean {
+        val data = intent?.data ?: return false
+        Log.d("MainActivity", "handleDeepLink: Checking intent data: $data")
+
+        val supportedHosts = listOf("audioscholar.page.link", "audioscholar-39b22.web.app", "audioscholar-39b22.firebaseapp.com")
+        if (data.scheme != "https" || !supportedHosts.contains(data.host)) {
+            return false
+        }
+
+        try {
+            var oobCode = data.getQueryParameter("oobCode")
+            // If oobCode is not directly in the URL, check if it's nested in a 'link' parameter (Firebase behavior)
+            if (oobCode.isNullOrBlank()) {
+                val linkParam = data.getQueryParameter("link")
+                if (!linkParam.isNullOrBlank()) {
+                    Log.d("MainActivity", "oobCode not found in top level, checking nested 'link' param: $linkParam")
+                    val linkUri = Uri.parse(linkParam)
+                    oobCode = linkUri.getQueryParameter("oobCode")
+                }
+            }
+
+            val mode = data.getQueryParameter("mode")
+            val path = data.path
+
+            if (oobCode.isNullOrBlank()) {
+                // Fallback Logic for State Mismatch: Browser might have already verified the user.
+                if (data.toString().contains("continueUrl") || data.path?.contains("/verify") == true) {
+                    Log.d("MainActivity", "oobCode missing. Attempting to reload user profile to check verification status.")
+                    val user = FirebaseAuth.getInstance().currentUser
+                    user?.reload()?.addOnCompleteListener { task ->
+                        if (task.isSuccessful && user.isEmailVerified) {
+                            Log.d("MainActivity", "User is verified after reload. Refreshing token.")
+                            user.getIdToken(true).addOnCompleteListener { tokenTask ->
+                                if (tokenTask.isSuccessful) {
+                                    val firebaseToken = tokenTask.result?.token
+                                    if (firebaseToken != null) {
+                                        lifecycleScope.launch {
+                                            val result = authRepository.verifyFirebaseToken(FirebaseTokenRequest(firebaseToken))
+                                            when (result) {
+                                                is Resource.Success -> {
+                                                    Log.d("MainActivity", "Token exchanged and saved. Signing out and redirecting to Login.")
+                                                    Toast.makeText(this@MainActivity, "Email verified successfully! Redirecting to login in 3 seconds...", Toast.LENGTH_LONG).show()
+                                                    lifecycleScope.launch {
+                                                        delay(3000)
+                                                        FirebaseAuth.getInstance().signOut()
+                                                        mainViewModel.performLogout()
+                                                    }
+                                                }
+                                                is Resource.Error -> {
+                                                    Log.e("MainActivity", "Token exchange failed: ${result.message}")
+                                                    Toast.makeText(this@MainActivity, "Verification successful, but login failed: ${result.message}", Toast.LENGTH_LONG).show()
+                                                }
+                                                else -> {}
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Log.e("MainActivity", "Failed to refresh token: ${tokenTask.exception?.message}")
+                                }
+                            }
+                        } else {
+                            Log.w("MainActivity", "Reload failed or user still not verified.")
+                        }
+                    }
+                    return true // Handled as a fallback check
+                }
+
+                Log.w("MainActivity", "Deep link received but oobCode is missing or blank.")
+                Toast.makeText(this, "Invalid link: Action code is missing.", Toast.LENGTH_LONG).show()
+                return false // Considered handled as it's a known invalid link format
+            }
+
+            Log.d("MainActivity", "Deep link path: $path, mode: $mode, oobCode present.")
+
+            // Check mode in the nested link as well if needed, or rely on the code
+            val isVerifyEmail = mode == "verifyEmail" || path?.startsWith("/verify") == true
+            val isResetPassword = mode == "resetPassword" || path?.startsWith("/resetPassword") == true
+
+            when {
+                isVerifyEmail -> {
+                    Log.i("MainActivity", "Handling email verification deep link.")
+                    FirebaseAuth.getInstance().applyActionCode(oobCode)
+                        .addOnSuccessListener {
+                            Log.d("MainActivity", "Email verified. Reloading user to refresh token.")
+                            val user = FirebaseAuth.getInstance().currentUser
+                            user?.reload()?.addOnCompleteListener { reloadTask ->
+                                if (reloadTask.isSuccessful) {
+                                    user.getIdToken(true).addOnCompleteListener { tokenTask ->
+                                        if (tokenTask.isSuccessful) {
+                                            val firebaseToken = tokenTask.result?.token
+                                            if (firebaseToken != null) {
+                                                lifecycleScope.launch {
+                                                    val result = authRepository.verifyFirebaseToken(FirebaseTokenRequest(firebaseToken))
+                                                    when (result) {
+                                                        is Resource.Success -> {
+                                                            Log.d("MainActivity", "Token exchanged and saved. Signing out and redirecting to Login.")
+                                                            Toast.makeText(this@MainActivity, "Email verified successfully! Redirecting to login in 3 seconds...", Toast.LENGTH_LONG).show()
+                                                            lifecycleScope.launch {
+                                                                delay(3000)
+                                                                FirebaseAuth.getInstance().signOut()
+                                                                mainViewModel.performLogout()
+                                                            }
+                                                        }
+                                                        is Resource.Error -> {
+                                                            Log.e("MainActivity", "Token exchange failed: ${result.message}")
+                                                            Toast.makeText(this@MainActivity, "Verified, but login failed: ${result.message}", Toast.LENGTH_LONG).show()
+                                                        }
+                                                        else -> {}
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            Log.e("MainActivity", "Failed to get fresh token: ${tokenTask.exception?.message}")
+                                            Toast.makeText(this@MainActivity, "Verified, but failed to refresh session. Please login manually.", Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .addOnFailureListener { e ->
+                            val errorMessage = e.message ?: "An unknown error occurred."
+                            Log.e("MainActivity", "Email verification failed: $errorMessage", e)
+                            Toast.makeText(this, "Verification failed: $errorMessage", Toast.LENGTH_LONG).show()
+                        }
+                    return true
+                }
+                isResetPassword -> {
+                    Log.i("MainActivity", "Handling password reset deep link.")
+                    FirebaseAuth.getInstance().verifyPasswordResetCode(oobCode)
+                        .addOnSuccessListener { email ->
+                            Log.i("MainActivity", "Password reset code verified for $email. Navigating to confirm screen.")
+                            if (::navController.isInitialized) {
+                                navController.navigate(Screen.ResetPasswordConfirm.createRoute(oobCode)) {
+                                    launchSingleTop = true
+                                }
+                            } else {
+                                Log.e("MainActivity", "NavController not initialized, cannot navigate to reset password.")
+                                Toast.makeText(this, "Could not open reset screen. Please restart the app.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                        .addOnFailureListener { e ->
+                            val errorMessage = e.message ?: "Invalid or expired link."
+                            Log.e("MainActivity", "Invalid password reset code: $errorMessage", e)
+                            Toast.makeText(this, "Error: $errorMessage", Toast.LENGTH_LONG).show()
+                        }
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Unexpected error while handling deep link: ${e.message}", e)
+            Toast.makeText(this, "Error processing link. It may be malformed.", Toast.LENGTH_LONG).show()
+            return true
+        }
+        return false
     }
 
     private fun handleGitHubRedirectIntent(intent: Intent?, source: String): Boolean {
@@ -630,7 +802,6 @@ fun MainAppScreen(
             }
             composable(Screen.Settings.route) {
                 edu.cit.audioscholar.ui.settings.SettingsScreen(
-                    navController = navController,
                     drawerState = drawerState,
                     scope = scope
                 )
@@ -672,8 +843,24 @@ fun MainAppScreen(
             composable(Screen.Registration.route) {
                 RegistrationScreen(navController = navController)
             }
+            composable(Screen.EmailVerification.route) {
+                EmailVerificationScreen(navController = navController)
+            }
+            composable(Screen.ForgotPassword.route) {
+                ForgotPasswordScreen(navController = navController)
+            }
             composable(Screen.ChangePassword.route) {
                 edu.cit.audioscholar.ui.settings.ChangePasswordScreen(
+                    navController = navController
+                )
+            }
+            composable(
+                route = Screen.ResetPasswordConfirm.route,
+                arguments = listOf(
+                    navArgument("oobCode") { type = NavType.StringType }
+                )
+            ) {
+                edu.cit.audioscholar.ui.auth.ResetPasswordConfirmScreen(
                     navController = navController
                 )
             }

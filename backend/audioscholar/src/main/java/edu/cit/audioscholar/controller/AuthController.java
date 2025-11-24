@@ -95,7 +95,9 @@ public class AuthController {
 		log.info("Received registration request for email: {}", registrationRequest.getEmail());
 		try {
 			User registeredUser = userService.registerNewUser(registrationRequest);
+			String customToken = firebaseService.createCustomToken(registeredUser.getUserId());
 			AuthResponse response = new AuthResponse(true, "User registered successfully.", registeredUser.getUserId());
+			response.setCustomToken(customToken);
 			return ResponseEntity.status(HttpStatus.CREATED).body(response);
 		} catch (FirebaseAuthException e) {
 			log.error("Firebase Auth error during registration for {}: {}", registrationRequest.getEmail(),
@@ -324,12 +326,15 @@ public class AuthController {
 			Authentication authentication = new UsernamePasswordAuthenticationToken(firebaseUid, null, authorities);
 			String jwt = jwtTokenProvider.generateToken(authentication);
 
+			String customToken = firebaseService.createCustomToken(firebaseUid);
+
 			log.info("Authorization Bearer Token: {}", jwt);
 			log.info("Generated API JWT for user UID {} (Google)", firebaseUid);
 
 			AuthResponse response = new AuthResponse(true, "Google token verified successfully.");
 			response.setToken(jwt);
 			response.setUserId(firebaseUid);
+			response.setCustomToken(customToken);
 			return ResponseEntity.ok(response);
 
 		} catch (GeneralSecurityException | IOException e) {
@@ -430,6 +435,8 @@ public class AuthController {
 										null, authorities);
 								String jwt = jwtTokenProvider.generateToken(authentication);
 								Instant jwtEnd = Instant.now();
+								String customToken = firebaseService.createCustomToken(firebaseUid);
+
 								log.info("Authorization Bearer Token: {}", jwt);
 								log.info("Generated API JWT for user UID {} (GitHub). Duration: {}ms", firebaseUid,
 										Duration.between(jwtStart, jwtEnd).toMillis());
@@ -437,12 +444,17 @@ public class AuthController {
 								AuthResponse response = new AuthResponse(true, "GitHub login successful.");
 								response.setToken(jwt);
 								response.setUserId(firebaseUid);
+								response.setCustomToken(customToken);
 
 								Instant end = Instant.now();
 								log.info("Total GitHub verification flow duration: {}ms",
 										Duration.between(start, end).toMillis());
 								return Mono.<ResponseEntity<?>>just(ResponseEntity.ok(response));
 
+							} catch (FirebaseAuthException e) {
+								log.error("FirebaseAuthException during custom token creation in GitHub flow: {}",
+										e.getMessage());
+								return Mono.error(e);
 							} catch (FirestoreInteractionException e) {
 								log.error("Firestore error during GitHub user profile handling for Firebase UID {}: {}",
 										firebaseUid, e.getMessage(), e);

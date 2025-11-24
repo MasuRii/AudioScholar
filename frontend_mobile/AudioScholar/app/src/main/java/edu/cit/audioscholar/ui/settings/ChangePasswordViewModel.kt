@@ -8,9 +8,13 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import dagger.hilt.android.lifecycle.HiltViewModel
+import edu.cit.audioscholar.R
 import edu.cit.audioscholar.data.remote.dto.ChangePasswordRequest
+import edu.cit.audioscholar.domain.model.PasswordStrength
 import edu.cit.audioscholar.domain.repository.AuthRepository
+import edu.cit.audioscholar.domain.usecase.PasswordValidator
 import edu.cit.audioscholar.util.Resource
+import edu.cit.audioscholar.util.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,13 +30,13 @@ data class ChangePasswordUiState(
     val currentPasswordVisible: Boolean = false,
     val newPasswordVisible: Boolean = false,
     val confirmPasswordVisible: Boolean = false,
-    val currentPasswordError: String? = null,
-    val newPasswordErrors: List<String> = emptyList(),
-    val confirmPasswordError: String? = null,
+    val currentPasswordError: UiText? = null,
+    val newPasswordErrors: List<UiText> = emptyList(),
+    val confirmPasswordError: UiText? = null,
     val passwordStrength: PasswordStrength = PasswordStrength.NONE,
     val isLoading: Boolean = false,
     val changeSuccess: Boolean = false,
-    val generalMessage: String? = null
+    val generalMessage: UiText? = null
 )
 
 @HiltViewModel
@@ -55,10 +59,9 @@ class ChangePasswordViewModel @Inject constructor(
     }
 
     fun onNewPasswordChange(password: String) {
-        val errors = validateNewPasswordCriteria(password)
-        val strength = calculateStrength(password)
+        val (strength, errors) = PasswordValidator.validatePassword(password)
         val confirmError = if (password != _uiState.value.confirmPassword && _uiState.value.confirmPassword.isNotEmpty()) {
-            "Passwords do not match"
+            UiText.StringResource(R.string.settings_password_validation_match)
         } else {
             null
         }
@@ -67,14 +70,14 @@ class ChangePasswordViewModel @Inject constructor(
                 newPassword = password,
                 newPasswordErrors = errors,
                 passwordStrength = strength,
-                confirmPasswordError = confirmError ?: it.confirmPasswordError?.takeIf { msg -> msg == "Passwords do not match" }
+                confirmPasswordError = confirmError ?: it.confirmPasswordError
             )
         }
     }
 
     fun onConfirmPasswordChange(password: String) {
         val error = if (_uiState.value.newPassword != password && password.isNotEmpty()) {
-            "Passwords do not match"
+            UiText.StringResource(R.string.settings_password_validation_match)
         } else {
             null
         }
@@ -98,43 +101,17 @@ class ChangePasswordViewModel @Inject constructor(
         _uiState.update { it.copy(confirmPasswordVisible = !it.confirmPasswordVisible) }
     }
 
-    private fun validateNewPasswordCriteria(password: String): List<String> {
-        val errors = mutableListOf<String>()
-        if (password.length < 8) errors.add("Minimum 8 characters")
-        if (!password.any { it.isUpperCase() }) errors.add("At least 1 uppercase letter")
-        if (!password.any { it.isLowerCase() }) errors.add("At least 1 lowercase letter")
-        if (!password.any { it.isDigit() }) errors.add("At least 1 number")
-        if (!password.any { !it.isLetterOrDigit() }) errors.add("At least one special character")
-        return errors
-    }
-
-    private fun calculateStrength(password: String): PasswordStrength {
-        var score = 0
-        if (password.length >= 8) score++
-        if (password.any { it.isUpperCase() }) score++
-        if (password.any { it.isLowerCase() }) score++
-        if (password.any { it.isDigit() }) score++
-        if (password.any { !it.isLetterOrDigit() }) score++
-
-        return when {
-            score >= 5 -> PasswordStrength.STRONG
-            score >= 3 -> PasswordStrength.MEDIUM
-            score >= 1 -> PasswordStrength.WEAK
-            else -> PasswordStrength.NONE
-        }
-    }
-
     private fun runFinalValidation(): Boolean {
         val currentPassword = _uiState.value.currentPassword
         val newPassword = _uiState.value.newPassword
         val confirmPassword = _uiState.value.confirmPassword
 
-        val currentError = if (currentPassword.isBlank()) "Current password is required" else null
-        val newErrors = validateNewPasswordCriteria(newPassword)
+        val currentError = if (currentPassword.isBlank()) UiText.StringResource(R.string.settings_current_password_required) else null
+        val (_, newErrors) = PasswordValidator.validatePassword(newPassword)
         val confirmError = if (newPassword.isNotBlank() && newPassword != confirmPassword) {
-            "Passwords do not match"
+            UiText.StringResource(R.string.settings_password_validation_match)
         } else if (newPassword.isNotBlank() && confirmPassword.isBlank()) {
-            "Please confirm your new password"
+            UiText.StringResource(R.string.settings_confirm_new_password_req)
         } else {
             null
         }
@@ -150,7 +127,7 @@ class ChangePasswordViewModel @Inject constructor(
         if (currentError == null && newErrors.isEmpty() && confirmError == null && currentPassword == newPassword) {
             _uiState.update {
                 it.copy(
-                    newPasswordErrors = listOf("New password cannot be the same as the current password.")
+                    newPasswordErrors = listOf(UiText.StringResource(R.string.settings_new_password_same_as_current))
                 )
             }
             return false
@@ -161,7 +138,7 @@ class ChangePasswordViewModel @Inject constructor(
 
     fun changePassword() {
         if (!runFinalValidation()) {
-            _uiState.update { it.copy(generalMessage = "Please correct the errors above.") }
+            _uiState.update { it.copy(generalMessage = UiText.StringResource(R.string.settings_password_form_invalid)) }
             return
         }
 
@@ -172,7 +149,14 @@ class ChangePasswordViewModel @Inject constructor(
 
         if (currentUser == null || email == null) {
             Log.e("ChangePasswordVM", "User not logged in or email unavailable.")
-            _uiState.update { it.copy(isLoading = false, generalMessage = "Authentication error. Please log in again.") }
+            _uiState.update { it.copy(isLoading = false, generalMessage = UiText.StringResource(R.string.error_auth_required)) }
+            return
+        }
+
+        val isPasswordProvider = currentUser.providerData.any { it.providerId == EmailAuthProvider.PROVIDER_ID }
+        if (!isPasswordProvider) {
+            Log.e("ChangePasswordVM", "User does not have a password provider linked.")
+            _uiState.update { it.copy(isLoading = false, generalMessage = UiText.StringResource(R.string.error_auth_required)) }
             return
         }
 
@@ -204,7 +188,8 @@ class ChangePasswordViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
-                                generalMessage = result.message ?: "Failed to update password on server. Please try again."
+                                generalMessage = result.message?.let { UiText.DynamicString(it) }
+                                    ?: UiText.StringResource(R.string.error_password_update_failed)
                             )
                         }
                     }
@@ -216,9 +201,9 @@ class ChangePasswordViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e("ChangePasswordVM", "Firebase re-authentication failed.", e)
                 val errorMessage = when (e) {
-                    is FirebaseAuthInvalidCredentialsException -> "Incorrect current password. Please try again."
-                    is FirebaseAuthInvalidUserException -> "User account not found or disabled."
-                    else -> "Re-authentication failed. Please try again later."
+                    is FirebaseAuthInvalidCredentialsException -> UiText.StringResource(R.string.settings_password_validation_current_mock_error)
+                    is FirebaseAuthInvalidUserException -> UiText.StringResource(R.string.error_user_not_found_or_disabled)
+                    else -> UiText.StringResource(R.string.error_reauth_failed)
                 }
                 _uiState.update {
                     it.copy(

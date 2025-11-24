@@ -5,6 +5,7 @@ public class AuthResponse {
 	private boolean success;
 	private String userId;
 	private String token;
+	private String customToken;
 
 	public AuthResponse() {
 	}
@@ -43,5 +44,11 @@ public class AuthResponse {
 	}
 	public void setToken(String token) {
 		this.token = token;
+	}
+	public String getCustomToken() {
+		return customToken;
+	}
+	public void setCustomToken(String customToken) {
+		this.customToken = customToken;
 	}
 }

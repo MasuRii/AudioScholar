@@ -124,7 +124,7 @@ public class FirebaseService {
 		}
 	}
 
-	private FirebaseAuth getFirebaseAuth() {
+	FirebaseAuth getFirebaseAuth() {
 		return this.firebaseAuth;
 	}
 
@@ -919,6 +919,30 @@ public class FirebaseService {
 
 	@CacheEvict(value = CACHE_METADATA_BY_ID, key = "#metadataId", condition = "#metadataId != null")
 	@SuppressWarnings("null")
+	public String createCustomToken(String uid) throws FirebaseAuthException {
+		if (!StringUtils.hasText(uid)) {
+			log.warn("Attempted to create custom token with blank uid.");
+			throw new IllegalArgumentException("UID cannot be blank.");
+		}
+
+		try {
+			log.debug("Verifying user existence for UID: {}", uid);
+			getFirebaseAuth().getUser(uid);
+			log.info("User {} confirmed to exist. Proceeding with custom token creation.", uid);
+
+			String customToken = getFirebaseAuth().createCustomToken(uid);
+			log.info("Successfully created custom token for UID: {}", uid);
+			return customToken;
+		} catch (FirebaseAuthException e) {
+			if (e.getAuthErrorCode() == com.google.firebase.auth.AuthErrorCode.USER_NOT_FOUND) {
+				log.error("Attempted to create custom token for a non-existent user with UID: {}", uid);
+			} else {
+				log.error("Failed to create custom token for UID {}: {}", uid, e.getMessage());
+			}
+			throw e;
+		}
+	}
+
 	public void updateAudioMetadataStatusAndReason(String metadataId, @Nullable String userId, ProcessingStatus status,
 			String reason) throws ExecutionException, InterruptedException {
 		if (metadataId == null || status == null) {

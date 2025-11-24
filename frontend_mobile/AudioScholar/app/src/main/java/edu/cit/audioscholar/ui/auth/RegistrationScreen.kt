@@ -1,3 +1,4 @@
+
 package edu.cit.audioscholar.ui.auth
 
 import android.app.Activity
@@ -5,6 +6,11 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.*
@@ -15,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -24,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,6 +57,57 @@ fun RegistrationScreen(
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    
+    // Legal Modal State
+    val sheetState = rememberModalBottomSheetState()
+    var showLegalSheet by remember { mutableStateOf(false) }
+    var legalSheetTitle by remember { mutableStateOf("") }
+    var legalSheetContent by remember { mutableStateOf("") }
+
+    // Password Focus State for dynamic validation visibility
+    var isPasswordFocused by remember { mutableStateOf(false) }
+
+    if (showLegalSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showLegalSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f) // Take up most of the screen
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                 Text(
+                    text = legalSheetTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    textAlign = TextAlign.Center
+                )
+                HorizontalDivider()
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 16.dp)
+                ) {
+                    Text(
+                        text = legalSheetContent,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                Button(
+                    onClick = { scope.launch { sheetState.hide() }.invokeOnCompletion { showLegalSheet = false } },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                ) {
+                    Text("Close")
+                }
+            }
+        }
+    }
 
     val passwordsMatch = uiState.password == uiState.confirmPassword
     val showPasswordMismatchError = !passwordsMatch && uiState.confirmPassword.isNotEmpty() && uiState.password.isNotEmpty()
@@ -82,8 +141,8 @@ fun RegistrationScreen(
 
     LaunchedEffect(uiState.registrationSuccess) {
         if (uiState.registrationSuccess) {
-            Log.d("RegistrationScreen", "registrationSuccess is true. Navigating to Login screen.")
-            navController.navigate(Screen.Login.route) {
+            Log.d("RegistrationScreen", "registrationSuccess is true. Navigating to EmailVerification screen.")
+            navController.navigate(Screen.EmailVerification.route) {
                 popUpTo(Screen.Registration.route) { inclusive = true }
                 launchSingleTop = true
             }
@@ -201,7 +260,9 @@ fun RegistrationScreen(
                 onValueChange = viewModel::onPasswordChange,
                 label = { Text(stringResource(R.string.registration_password)) },
                 leadingIcon = { Icon(Icons.Outlined.Password, contentDescription = null) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { isPasswordFocused = it.isFocused },
                 singleLine = true,
                 visualTransformation = if (uiState.isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
@@ -220,7 +281,19 @@ fun RegistrationScreen(
                 enabled = !uiState.isAnyLoading
             )
 
-            PasswordRequirementsIndicator(result = passwordValidation)
+            // Dynamic Password Validation
+            AnimatedVisibility(
+                visible = isPasswordFocused || (uiState.password.isNotEmpty() && !passwordValidation.isValid),
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                PasswordRequirementsIndicator(result = passwordValidation)
+            }
+            
+            // Add a small spacer if validation is hidden to keep layout breathing, but less than before
+            if (!(isPasswordFocused || (uiState.password.isNotEmpty() && !passwordValidation.isValid))) {
+                 Spacer(modifier = Modifier.height(8.dp))
+            }
 
             OutlinedTextField(
                 value = uiState.confirmPassword,
@@ -252,16 +325,24 @@ fun RegistrationScreen(
                 enabled = !uiState.isAnyLoading
             )
 
-            if (showPasswordMismatchError) {
+            AnimatedVisibility(
+                visible = showPasswordMismatchError,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
                 Text(
                     text = stringResource(R.string.error_passwords_do_not_match),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 4.dp, bottom = 4.dp),
                     textAlign = TextAlign.Start
                 )
-            } else {
-                Spacer(modifier = Modifier.height(MaterialTheme.typography.bodySmall.lineHeight.value.dp + 8.dp))
+            }
+            
+            if (!showPasswordMismatchError) {
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             Row(
@@ -273,23 +354,38 @@ fun RegistrationScreen(
                     onCheckedChange = viewModel::onTermsAcceptedChange,
                     enabled = !uiState.isAnyLoading
                 )
+                
                 val annotatedTermsText = buildAnnotatedString {
-                    append(stringResource(R.string.registration_terms_prefix).trimEnd())
-                    append(" ")
-                    pushStringAnnotation(tag = "T&C", annotation = "terms_url")
-                    withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary)) {
-                        append(stringResource(R.string.registration_terms_link))
+                    append("I agree to the ")
+                    pushStringAnnotation(tag = "TERMS", annotation = "terms")
+                    withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)) {
+                        append("Terms of Service")
+                    }
+                    pop()
+                    append(" and ")
+                    pushStringAnnotation(tag = "PRIVACY", annotation = "privacy")
+                    withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)) {
+                        append("Privacy Policy")
                     }
                     pop()
                 }
+                
                 ClickableText(
                     text = annotatedTermsText,
                     onClick = { offset ->
                         if (!uiState.isAnyLoading) {
-                            annotatedTermsText.getStringAnnotations(tag = "T&C", start = offset, end = offset)
-                                .firstOrNull()?.let { annotation ->
-                                    Log.d("RegistrationScreen", "Terms link clicked. Annotation: ${annotation.item}")
-                                    scope.launch { snackbarHostState.showSnackbar("Terms & Conditions clicked (Placeholder)") }
+                            annotatedTermsText.getStringAnnotations(tag = "TERMS", start = offset, end = offset)
+                                .firstOrNull()?.let { 
+                                    legalSheetTitle = "Terms of Service"
+                                    legalSheetContent = LegalContent.TERMS_OF_SERVICE
+                                    showLegalSheet = true
+                                }
+                            
+                            annotatedTermsText.getStringAnnotations(tag = "PRIVACY", start = offset, end = offset)
+                                .firstOrNull()?.let { 
+                                    legalSheetTitle = "Privacy Policy"
+                                    legalSheetContent = LegalContent.PRIVACY_POLICY
+                                    showLegalSheet = true
                                 }
                         }
                     },
@@ -394,7 +490,15 @@ fun PasswordRequirementsIndicator(
         modifier = modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), shape = MaterialTheme.shapes.small)
+            .padding(8.dp)
     ) {
+        Text(
+            text = "Password Requirements:",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
         PasswordRequirement(
             text = stringResource(R.string.settings_password_validation_length),
             isMet = result.meetsLength,

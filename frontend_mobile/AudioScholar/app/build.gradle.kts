@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     alias(libs.plugins.jetbrainsKotlinAndroid)
@@ -5,6 +8,12 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("com.google.gms.google-services")
     alias(libs.plugins.kotlinSerialization)
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
 }
 
 android {
@@ -16,7 +25,7 @@ android {
 
 android {
     namespace = "edu.cit.audioscholar"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "edu.cit.audioscholar"
@@ -29,6 +38,12 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        val baseUrl = localProperties.getProperty("BASE_URL") ?: "\"https://mastodon-balanced-randomly.ngrok-free.app/\""
+        val githubClientId = localProperties.getProperty("GITHUB_CLIENT_ID") ?: "\"Iv23liMzUNGL8JuXu40i\""
+
+        buildConfigField("String", "BASE_URL", baseUrl)
+        buildConfigField("String", "GITHUB_CLIENT_ID", githubClientId)
     }
 
     buildTypes {
@@ -116,6 +131,10 @@ dependencies {
     implementation(libs.firebase.analytics.ktx)
 
     testImplementation(libs.junit)
+    testImplementation("io.mockk:mockk:1.13.10")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation(libs.turbine)
+    testImplementation(libs.kotlinx.coroutines.play.services)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

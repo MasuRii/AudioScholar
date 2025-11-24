@@ -1,9 +1,12 @@
 package edu.cit.audioscholar.domain.repository
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import com.google.firebase.auth.ActionCodeSettings
+import com.google.firebase.auth.FirebaseAuth
 import com.google.gson.Gson
 import edu.cit.audioscholar.R
 import edu.cit.audioscholar.data.local.UserDataStore
@@ -19,10 +22,12 @@ import edu.cit.audioscholar.data.remote.dto.UserProfileDto
 import edu.cit.audioscholar.data.remote.service.ApiService
 import edu.cit.audioscholar.util.Resource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
@@ -41,8 +46,20 @@ class AuthRepositoryImpl @Inject constructor(
     private val apiService: ApiService,
     private val application: Application,
     private val gson: Gson,
-    private val userDataStore: UserDataStore
+    private val userDataStore: UserDataStore,
+    private val firebaseAuth: FirebaseAuth,
+    private val prefs: SharedPreferences
 ) : AuthRepository {
+
+    override fun saveAuthToken(token: String) {
+        prefs.edit().putString("auth_token", token).apply()
+        Log.d(TAG_AUTH_REPO, "Auth Token saved to SharedPreferences")
+    }
+
+    private fun clearAuthToken() {
+        prefs.edit().remove("auth_token").apply()
+        Log.d(TAG_AUTH_REPO, "Auth Token removed from SharedPreferences")
+    }
 
     override suspend fun registerUser(request: RegistrationRequest): AuthResult {
         return try {
@@ -53,6 +70,8 @@ class AuthRepositoryImpl @Inject constructor(
                 val authResponse = response.body()
                 if (authResponse != null) {
                     Log.i(TAG_AUTH_REPO, "Registration successful: ${authResponse.message ?: "No message"}")
+                    authResponse.token?.let { saveAuthToken(it) }
+                    authResponse.customToken?.let { signInWithCustomTokenAndCheckVerification(it) }
                     Resource.Success(authResponse)
                 } else {
                     Log.w(TAG_AUTH_REPO, "Registration successful (Code: ${response.code()}) but response body was null.")
@@ -90,6 +109,8 @@ class AuthRepositoryImpl @Inject constructor(
                 if (authResponse != null) {
                     if (authResponse.token != null) {
                         Log.i(TAG_AUTH_REPO, "Login successful. Token received.")
+                        saveAuthToken(authResponse.token)
+                        authResponse.customToken?.let { signInWithCustomTokenAndCheckVerification(it) }
                         Resource.Success(authResponse)
                     } else {
                         Log.w(TAG_AUTH_REPO, "Login successful (Code: ${response.code()}) but token was null in response.")
@@ -130,6 +151,7 @@ class AuthRepositoryImpl @Inject constructor(
                 val authResponse = response.body()
                 if (authResponse != null && authResponse.token != null) {
                     Log.i(TAG_AUTH_REPO, "Firebase token verified successfully by backend. API JWT received.")
+                    saveAuthToken(authResponse.token)
                     Resource.Success(authResponse)
                 } else {
                     val errorMsg = "Backend verification successful but response or API token was null."
@@ -161,17 +183,13 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun verifyGoogleToken(request: FirebaseTokenRequest): AuthResult {
         return try {
             Log.d(TAG_AUTH_REPO, "Sending Google ID token to backend for verification.")
-            Log.d(TAG_AUTH_REPO, "[DEBUG] ID Token received from Google: ${request.idToken != null}")
-            Log.d(TAG_AUTH_REPO, "[DEBUG] ID Token length: ${request.idToken?.length ?: 0}")
-            if (request.idToken != null) {
-                Log.d(TAG_AUTH_REPO, "[DEBUG] ID Token preview: ${request.idToken.substring(0, minOf(50, request.idToken.length))}...")
-            }
             val response = apiService.verifyGoogleToken(request)
 
             if (response.isSuccessful) {
                 val authResponse = response.body()
                 if (authResponse != null && authResponse.token != null) {
                     Log.i(TAG_AUTH_REPO, "Google token verified successfully by backend. API JWT received.")
+                    saveAuthToken(authResponse.token)
                     Resource.Success(authResponse)
                 } else {
                     val errorMsg = "Backend Google verification successful but response or API token was null."
@@ -209,6 +227,7 @@ class AuthRepositoryImpl @Inject constructor(
                 val authResponse = response.body()
                 if (authResponse != null && authResponse.token != null) {
                     Log.i(TAG_AUTH_REPO, "GitHub code verified successfully by backend. API JWT received.")
+                    saveAuthToken(authResponse.token)
                     Resource.Success(authResponse)
                 } else {
                     val errorMsg = "Backend GitHub verification successful but response or API token was null."
@@ -480,6 +499,67 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun sendPasswordResetEmail(email: String): Flow<SimpleResult> = flow {
+        emit(Resource.Loading())
+        try {
+            Log.d(TAG_AUTH_REPO, "Sending password reset email to: $email")
+            val actionCodeSettings = ActionCodeSettings.newBuilder()
+                .setUrl("https://audioscholar-39b22.web.app/resetPassword")
+                .setHandleCodeInApp(true)
+                .setAndroidPackageName(
+                    "edu.cit.audioscholar",
+                    true,
+                    null
+                )
+                .build()
+
+            firebaseAuth.sendPasswordResetEmail(email, actionCodeSettings).await()
+            Log.i(TAG_AUTH_REPO, "Password reset email sent successfully.")
+            emit(Resource.Success(Unit))
+        } catch (e: Exception) {
+            Log.e(TAG_AUTH_REPO, "Error sending password reset email: ${e.message}", e)
+            emit(Resource.Error(e.message ?: "Failed to send password reset email."))
+        }
+    }
+
+    override suspend fun applyActionCode(code: String): SimpleResult {
+        return try {
+            Log.d(TAG_AUTH_REPO, "Applying action code: $code")
+            firebaseAuth.applyActionCode(code).await()
+            Log.i(TAG_AUTH_REPO, "Action code applied successfully.")
+            // If it was email verification, reload user to update emailVerified status
+            firebaseAuth.currentUser?.reload()?.await()
+            Resource.Success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG_AUTH_REPO, "Failed to apply action code: ${e.message}", e)
+            Resource.Error(e.message ?: "Failed to verify code.")
+        }
+    }
+
+    override suspend fun verifyPasswordResetCode(code: String): Resource<String> {
+        return try {
+            Log.d(TAG_AUTH_REPO, "Verifying password reset code: $code")
+            val email = firebaseAuth.verifyPasswordResetCode(code).await()
+            Log.i(TAG_AUTH_REPO, "Password reset code valid for email: $email")
+            Resource.Success(email ?: "")
+        } catch (e: Exception) {
+            Log.e(TAG_AUTH_REPO, "Invalid password reset code: ${e.message}", e)
+            Resource.Error(e.message ?: "Invalid code.")
+        }
+    }
+
+    override suspend fun confirmPasswordReset(code: String, newPassword: String): SimpleResult {
+        return try {
+            Log.d(TAG_AUTH_REPO, "Confirming password reset with code.")
+            firebaseAuth.confirmPasswordReset(code, newPassword).await()
+            Log.i(TAG_AUTH_REPO, "Password reset confirmed successfully.")
+            Resource.Success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG_AUTH_REPO, "Failed to confirm password reset: ${e.message}", e)
+            Resource.Error(e.message ?: "Failed to reset password.")
+        }
+    }
+
     override suspend fun logout(): SimpleResult {
         return try {
             Log.d(TAG_AUTH_REPO, "Attempting API logout call.")
@@ -487,6 +567,7 @@ class AuthRepositoryImpl @Inject constructor(
 
             if (response.isSuccessful) {
                 Log.i(TAG_AUTH_REPO, "API logout successful (Code: ${response.code()}).")
+                clearAuthToken()
                 Resource.Success(Unit)
             } else {
                 val errorBody = response.errorBody()?.string()
@@ -542,6 +623,44 @@ class AuthRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG_AUTH_REPO, "Unexpected exception during role update: ${e.message}", e)
             Resource.Error(application.getString(R.string.error_unexpected, e.message ?: "Unknown error"))
+        }
+    }
+
+    private suspend fun signInWithCustomTokenAndCheckVerification(customToken: String?) {
+        if (customToken.isNullOrBlank()) {
+            Log.w(TAG_AUTH_REPO, "signInWithCustomToken was called with a null or blank token.")
+            return
+        }
+
+        try {
+            Log.d(TAG_AUTH_REPO, "Initiating Firebase sign-in with custom token...")
+            val authResult = firebaseAuth.signInWithCustomToken(customToken).await()
+            val user = authResult.user
+
+            if (user == null) {
+                Log.w(TAG_AUTH_REPO, "Firebase sign-in with custom token succeeded but the user object is null.")
+                return
+            }
+
+            Log.i(TAG_AUTH_REPO, "Firebase sign-in successful for user: ${user.uid}")
+
+            if (!user.isEmailVerified) {
+                Log.i(TAG_AUTH_REPO, "User email is not verified for UID: ${user.uid}. Sending verification email.")
+                val actionCodeSettings = ActionCodeSettings.newBuilder()
+                    .setUrl("https://audioscholar-39b22.web.app/verify?email=${user.email}")
+                    .setHandleCodeInApp(true)
+                    .setAndroidPackageName("edu.cit.audioscholar", true, null)
+                    .build()
+                
+                user.sendEmailVerification(actionCodeSettings).await()
+                Log.i(TAG_AUTH_REPO, "Verification email sent successfully to ${user.email}.")
+            } else {
+                Log.i(TAG_AUTH_REPO, "User email is already verified for UID: ${user.uid}.")
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG_AUTH_REPO, "Failed to sign in with custom token or send verification email.", e)
         }
     }
 }
