@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import edu.cit.audioscholar.model.AudioMetadata;
 import edu.cit.audioscholar.model.ProcessingStatus;
+import edu.cit.audioscholar.util.RobustTaskExecutor;
 
 /**
  * Integration tests for SummarizationListenerService focusing on exception
@@ -61,6 +62,9 @@ class SummarizationListenerServiceIntegrationTest {
 	@Mock
 	private RabbitTemplate rabbitTemplate;
 
+	@Mock
+	private RobustTaskExecutor robustTaskExecutor;
+
 	private SummarizationListenerService summarizationListenerService;
 
 	@Captor
@@ -72,11 +76,18 @@ class SummarizationListenerServiceIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
+		// Mock RobustTaskExecutor to execute the task immediately
+		doAnswer(invocation -> {
+			Runnable task = invocation.getArgument(2);
+			task.run();
+			return null;
+		}).when(robustTaskExecutor).executeWithInfiniteRetry(anyString(), anyString(), any(Runnable.class));
+
 		// Manually create the service with mocked dependencies to avoid constructor
 		// injection issues
 		summarizationListenerService = new SummarizationListenerService(firebaseService, geminiService,
 				nhostStorageService, summaryService, cacheManager, objectMapper, "src/test/resources", // tempDir
-				recommenderService, recordingService, rabbitTemplate);
+				recommenderService, recordingService, rabbitTemplate, robustTaskExecutor);
 	}
 
 	// ==================== SIMPLIFIED EXCEPTION HANDLING TESTS ====================

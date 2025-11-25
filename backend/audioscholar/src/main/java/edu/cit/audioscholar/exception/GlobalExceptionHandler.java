@@ -68,6 +68,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
 	}
 
+	@ExceptionHandler(FirestoreInteractionException.class)
+	public ResponseEntity<Object> handleFirestoreInteractionException(FirestoreInteractionException ex,
+			WebRequest request) {
+		Map<String, Object> body = new HashMap<>();
+		body.put("timestamp", System.currentTimeMillis());
+		body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+		body.put("error", "Database Interaction Error");
+		body.put("message", ex.getMessage());
+
+		log.error("Firestore interaction error for request [{}]: {}", request.getDescription(false), ex.getMessage());
+
+		return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
+	}
+
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<Object> handleAllUncaughtException(Exception ex, WebRequest request) {
 		if (this.handleExceptionInternal(ex, null, new HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR,

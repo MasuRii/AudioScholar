@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -12,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +19,6 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -47,24 +44,6 @@ public class GeminiService {
 
 	@Value("${google.ai.api.key}")
 	private String apiKey;
-
-	@Value("${gemini.api.retry.max-attempts:3}")
-	private int maxRetryAttempts;
-
-	@Value("${gemini.api.retry.base-delay-ms:1000}")
-	private long baseRetryDelayMs;
-
-	@Value("${gemini.api.retry.max-delay-ms:30000}")
-	private long maxRetryDelayMs;
-
-	@Value("${gemini.api.retry.backoff-multiplier:2.0}")
-	private double backoffMultiplier;
-
-	@Value("${gemini.api.max-total-attempts:21}")
-	private int maxTotalAttempts;
-
-	@Value("${gemini.api.model.fallback-sequence:gemini-2.5-pro,gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash,gemini-2.0-flash-lite}")
-	private String modelFallbackSequence;
 
 	@Value("${gemini.api.model.transcription:gemini-2.0-flash}")
 	private String transcriptionModelName;
@@ -97,129 +76,13 @@ public class GeminiService {
 	private final RestTemplate restTemplate;
 	private final KeyRotationManager keyRotationManager;
 	private final ObjectMapper objectMapper = new ObjectMapper();
+	private final GeminiSmartRotationService rotationService;
 
-	public GeminiService(RestTemplate restTemplate, KeyRotationManager keyRotationManager) {
+	public GeminiService(RestTemplate restTemplate, KeyRotationManager keyRotationManager,
+			GeminiSmartRotationService rotationService) {
 		this.restTemplate = restTemplate;
 		this.keyRotationManager = keyRotationManager;
-	}
-
-	/**
-	 * Get the prioritized list of models for fallback sequence
-	 */
-	private List<String> getModelFallbackSequence() {
-		return Arrays.stream(modelFallbackSequence.split(",")).map(String::trim).filter(model -> !model.isEmpty())
-				.collect(Collectors.toList());
-	}
-
-	/**
-	 * Check if an error is transient and should be retried
-	 */
-	private boolean isTransientError(Exception e) {
-		if (e instanceof HttpServerErrorException) {
-			HttpStatusCode status = ((HttpServerErrorException) e).getStatusCode();
-			int statusCode = status.value();
-			return statusCode == 503 || statusCode == 502 || statusCode == 504;
-		}
-		if (e instanceof HttpClientErrorException) {
-			HttpStatusCode status = ((HttpClientErrorException) e).getStatusCode();
-			int statusCode = status.value();
-			return statusCode == 429; // Too Many Requests
-		}
-		return e instanceof ResourceAccessException;
-	}
-
-	/**
-	 * Calculate exponential backoff delay with jitter
-	 */
-	private long calculateBackoffDelay(int attempt) {
-		long exponentialDelay = (long) (baseRetryDelayMs * Math.pow(backoffMultiplier, attempt - 1));
-		long boundedDelay = Math.min(exponentialDelay, maxRetryDelayMs);
-		// Add jitter (10-20% randomness) to prevent thundering herd
-		long jitter = (long) (boundedDelay * (0.1 + Math.random() * 0.1));
-		return boundedDelay + jitter;
-	}
-
-	/**
-	 * Enhanced retry logic with exponential backoff and model fallback
-	 */
-	private <T> T executeWithEnhancedRetry(RetryableOperation<T> operation, String operationName,
-			String... fallbackModels) throws Exception {
-		List<String> models = new ArrayList<>();
-		models.addAll(Arrays.asList(fallbackModels));
-		models.addAll(getModelFallbackSequence());
-
-		// Remove duplicates while preserving order
-		models = models.stream().distinct().collect(Collectors.toList());
-
-		int totalAttempts = 0;
-		int modelIndex = 0;
-		int retryAttempts = 0;
-
-		while (totalAttempts < maxTotalAttempts && modelIndex < models.size()) {
-			String currentModel = models.get(modelIndex);
-			retryAttempts = 0;
-
-			while (retryAttempts < maxRetryAttempts && totalAttempts < maxTotalAttempts) {
-				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
-				try {
-					totalAttempts++;
-					retryAttempts++;
-
-					log.info("{} attempt {}/{} with model {} (total attempt {}/{})", operationName, retryAttempts,
-							maxRetryAttempts, currentModel, totalAttempts, maxTotalAttempts);
-
-					T result = operation.execute(currentModel, currentKey);
-					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
-					return result;
-
-				} catch (Exception e) {
-					String errorType = e.getClass().getSimpleName();
-					String statusInfo = "";
-
-					if (e instanceof HttpStatusCodeException) {
-						HttpStatusCodeException hse = (HttpStatusCodeException) e;
-						int statusCode = hse.getStatusCode().value();
-						statusInfo = String.format(" (HTTP %d)", statusCode);
-
-						if (statusCode == 429 || statusCode == 403) {
-							keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
-						}
-					}
-
-					if (isTransientError(e) && retryAttempts < maxRetryAttempts) {
-						long delay = calculateBackoffDelay(retryAttempts);
-						log.warn("{} failed with transient error {}{} on attempt {}/{}, retrying in {}ms with model {}",
-								operationName, errorType, statusInfo, retryAttempts, maxRetryAttempts, delay,
-								currentModel);
-
-						try {
-							TimeUnit.MILLISECONDS.sleep(delay);
-						} catch (InterruptedException ie) {
-							Thread.currentThread().interrupt();
-							throw new RuntimeException("Operation interrupted during retry wait", ie);
-						}
-					} else if (isTransientError(e)) {
-						// Transient error but max retries reached for this model, try next model
-						log.warn(
-								"{} failed with transient error {}{} after {} attempts with model {}, falling back to next model",
-								operationName, errorType, statusInfo, maxRetryAttempts, currentModel);
-						break; // Break inner retry loop, try next model
-					} else {
-						// Non-transient error, try next model
-						log.error("{} failed with non-transient error {}{} with model {}, falling back to next model",
-								operationName, errorType, statusInfo, currentModel);
-						break; // Break inner retry loop, try next model
-					}
-				}
-			}
-
-			modelIndex++;
-		}
-
-		// All models and attempts exhausted
-		log.error("{} failed after {} total attempts across all models and retry attempts", operationName,
-				totalAttempts);
-		throw new EnhancedGeminiException("All retry attempts and model fallbacks exhausted for " + operationName);
+		this.rotationService = rotationService;
 	}
 
 	/**
@@ -227,13 +90,25 @@ public class GeminiService {
 	 */
 	public String callGeminiSummarizationAPIWithFallback(String promptText, String transcriptText) {
 		try {
-			return executeWithEnhancedRetry(
-					(model, key) -> callGeminiSummarizationAPISingleModel(promptText, transcriptText, model, key),
-					"Summarization API", summarizationModelName);
-		} catch (EnhancedGeminiException e) {
-			log.error("Enhanced summarization API failed: {}", e.getMessage());
-			return createErrorResponse("API Request Failed",
-					"All retry attempts and model fallbacks exhausted for summarization");
+			return rotationService.executeWithInfiniteRotation(targetModel -> {
+				try {
+					String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+					String result = callGeminiSummarizationAPISingleModel(promptText, transcriptText, targetModel,
+							currentKey);
+					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
+					return result;
+				} catch (Exception e) {
+					if (e instanceof HttpClientErrorException) {
+						int code = ((HttpClientErrorException) e).getStatusCode().value();
+						if (code == 429 || code == 403) {
+							// Report key issue but let rotation service handle model 429
+						}
+					}
+					if (e instanceof RuntimeException)
+						throw (RuntimeException) e;
+					throw new RuntimeException(e);
+				}
+			});
 		} catch (Exception e) {
 			log.error("Unexpected error in enhanced summarization API: {}", e.getMessage(), e);
 			return createErrorResponse("Unexpected Error", e.getMessage());
@@ -331,17 +206,16 @@ public class GeminiService {
 			String fileUri = uploadFile(audioFilePath, mimeType, fileSize, displayName, uploadKey);
 			log.info("File uploaded successfully. URI: {}", fileUri);
 
-			return executeWithEnhancedRetry(
-					(model, key) -> callGeminiTranscriptionAPISingleModel(fileUri, mimeType, model, key),
-					"Transcription API", transcriptionModelName);
+			return rotationService.executeWithInfiniteRotation(targetModel -> {
+				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+				String result = callGeminiTranscriptionAPISingleModel(fileUri, mimeType, targetModel, currentKey);
+				keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
+				return result;
+			});
 
 		} catch (IOException e) {
 			log.error("IOException during file handling or upload: {}", e.getMessage(), e);
 			throw e;
-		} catch (EnhancedGeminiException e) {
-			log.error("Enhanced transcription API failed: {}", e.getMessage());
-			return createErrorResponse("API Request Failed",
-					"All retry attempts and model fallbacks exhausted for transcription");
 		} catch (Exception e) {
 			log.error("Unexpected error during enhanced transcription process: {}", e.getMessage(), e);
 			return createErrorResponse("Unexpected Transcription Error", e.getMessage());
@@ -435,21 +309,6 @@ public class GeminiService {
 			}
 			log.info("Successfully extracted transcript text (length: {}).", extractedText.length());
 			return extractedText;
-		}
-	}
-
-	@FunctionalInterface
-	private interface RetryableOperation<T> {
-		T execute(String modelName, String apiKey) throws Exception;
-	}
-
-	private static class EnhancedGeminiException extends Exception {
-		public EnhancedGeminiException(String message) {
-			super(message);
-		}
-
-		public EnhancedGeminiException(String message, Throwable cause) {
-			super(message, cause);
 		}
 	}
 
@@ -890,118 +749,22 @@ public class GeminiService {
 			pdfFileUri = uploadFile(pdfFilePath, "application/pdf", pdfSize, pdfDisplayName, uploadKey);
 			log.info("[{}] PDF uploaded successfully to Google Files API. URI: {}", metadataId, pdfFileUri);
 
-			HttpHeaders generateHeaders = new HttpHeaders();
-			generateHeaders.setContentType(MediaType.APPLICATION_JSON);
+			// Make the file URI effectively final for the lambda
+			final String finalPdfFileUri = pdfFileUri;
 
-			String prompt = """
-					Analyze the provided lecture transcript and the accompanying PDF document.
-					Generate a comprehensive, concise, well-structured summary incorporating information from BOTH sources, using Markdown in the `summaryText` field. Use headings (##) for main sections and bullet points (* or -) for details. Focus on core arguments, findings, definitions, and conclusions presented in either the transcript or the document.
-					Identify the main key points or action items discussed across both sources and list them as distinct strings in the `keyPoints` array.
-					List the 3-5 most important topics or keywords suitable for searching related content based on both sources in the `topics` array.
-					Identify important **terms, concepts, acronyms, proper nouns (people, places, organizations mentioned), and technical vocabulary** discussed in either the transcript or the document. For each, provide a concise definition relevant to the context. Structure this as an array of objects in the `glossary` field, where each object has a `term` (string) and a `definition` (string). Aim for comprehensive coverage of potentially unfamiliar items for a learner.
-					Ensure the entire output strictly adheres to the provided JSON schema. Output only the JSON object.
-					""";
-
-			Map<String, Object> promptPart = Map.of("text", prompt);
-			Map<String, Object> transcriptPart = Map.of("text", transcriptText);
-			Map<String, Object> pdfPart = Map.of("file_data",
-					Map.of("mime_type", "application/pdf", "file_uri", pdfFileUri));
-
-			List<Object> parts = List.of(promptPart, transcriptPart, pdfPart);
-			Map<String, Object> content = Map.of("parts", parts);
-			List<Object> contents = List.of(content);
-
-			Map<String, Object> generationConfig = new HashMap<>();
-			generationConfig.put("temperature", 0.4);
-			generationConfig.put("maxOutputTokens", MAX_OUTPUT_TOKENS_SUMMARIZATION);
-			generationConfig.put("response_mime_type", "application/json");
-			generationConfig.put("response_schema", SUMMARY_RESPONSE_SCHEMA);
-
-			Map<String, Object> requestBody = new HashMap<>();
-			requestBody.put("contents", contents);
-			requestBody.put("generationConfig", generationConfig);
-
-			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
-
-			log.info("[{}] Calling Gemini Summarization API (Model: {}) with transcript and PDF context (URI: {})...",
-					metadataId, SUMMARIZATION_MODEL_NAME, pdfFileUri);
-
-			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
-				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-						.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
+			return rotationService.executeWithInfiniteRotation(targetModel -> {
 				try {
-					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
-							requestEntity, String.class);
+					String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+					String result = callGeminiSummarizationWithPdfContextSingleModel(transcriptText, finalPdfFileUri,
+							metadataId, targetModel, currentKey);
 					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
-					log.info(
-							"[{}] Gemini Summarization API (generateContent with PDF) call successful on attempt {}. Status: {}",
-							metadataId, attempt, response.getStatusCode());
-
-					String responseBody = response.getBody();
-					if (responseBody == null || responseBody.isBlank()) {
-						log.warn(
-								"[{}] Gemini Summarization API (with PDF) returned successful status ({}) but empty body on attempt {}.",
-								metadataId, response.getStatusCode(), attempt);
-						if (attempt == MAX_RETRIES) {
-							return createErrorResponse("Empty Response",
-									"API returned success status but no content after retries.");
-						}
-						sleepForRetry(attempt);
-						continue;
-					}
-
-					try {
-						objectMapper.readTree(responseBody);
-						log.info("[{}] Successfully received JSON summary response (Length: {}).", metadataId,
-								responseBody.length());
-						return responseBody;
-					} catch (JsonProcessingException jsonEx) {
-						log.error(
-								"[{}] Gemini Summarization API (with PDF) response was not valid JSON on attempt {}. Body: {}. Error: {}",
-								metadataId, attempt, responseBody.substring(0, Math.min(responseBody.length(), 500)),
-								jsonEx.getMessage());
-						if (attempt == MAX_RETRIES) {
-							return createErrorResponse("Invalid JSON Response",
-									"API response was not valid JSON: " + jsonEx.getMessage());
-						}
-						sleepForRetry(attempt);
-						continue;
-					}
-
-				} catch (HttpServerErrorException | ResourceAccessException e) {
-					log.warn(
-							"[{}] Gemini Summarization API (with PDF) call failed on attempt {}/{} with retryable error: {}. Retrying...",
-							metadataId, attempt, MAX_RETRIES, e.getMessage());
-					if (attempt == MAX_RETRIES) {
-						log.error("[{}] Gemini Summarization API (with PDF) call failed after {} attempts.", metadataId,
-								MAX_RETRIES, e);
-						return createErrorResponse("API Request Failed (Server/Network)", e.getMessage());
-					}
-					sleepForRetry(attempt);
-				} catch (HttpClientErrorException e) {
-					int statusCode = e.getStatusCode().value();
-					if (statusCode == 429 || statusCode == 403) {
-						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
-					}
-					log.error("[{}] Gemini Summarization API (with PDF) client error: {} - {}", metadataId,
-							e.getStatusCode(), e.getResponseBodyAsString(), e);
-					String details = parseErrorDetails(e);
-					return createErrorResponse("API Client Error: " + e.getStatusCode(), details);
-				} catch (RestClientResponseException e) {
-					log.error("[{}] Gemini Summarization API (with PDF) REST client error: Status {}, Body: {}",
-							metadataId, e.getStatusCode(), e.getResponseBodyAsString(), e);
-					return createErrorResponse("API Request Failed (REST Client)", e.getMessage());
-				} catch (RuntimeException e) {
-					log.error(
-							"[{}] Unexpected runtime error during Gemini Summarization (with PDF) processing on attempt {}: {}",
-							metadataId, attempt, e.getMessage(), e);
-					return createErrorResponse("Summarization Processing Error", e.getMessage());
+					return result;
+				} catch (Exception e) {
+					if (e instanceof RuntimeException)
+						throw (RuntimeException) e;
+					throw new RuntimeException(e);
 				}
-			}
-			return createErrorResponse("API Request Failed",
-					"Max retries reached for summarization or unexpected flow.");
+			});
 
 		} catch (IOException e) {
 			log.error("[{}] IOException during PDF upload: {}", metadataId, e.getMessage(), e);
@@ -1012,6 +775,71 @@ public class GeminiService {
 		} catch (Exception e) {
 			log.error("[{}] Unexpected error during combined summarization setup: {}", metadataId, e.getMessage(), e);
 			return createErrorResponse("Unexpected Summarization Setup Error", e.getMessage());
+		}
+	}
+
+	private String callGeminiSummarizationWithPdfContextSingleModel(String transcriptText, String pdfFileUri,
+			String metadataId, String modelName, String currentApiKey) throws Exception {
+		HttpHeaders generateHeaders = new HttpHeaders();
+		generateHeaders.setContentType(MediaType.APPLICATION_JSON);
+
+		String prompt = """
+				Analyze the provided lecture transcript and the accompanying PDF document.
+				Generate a comprehensive, concise, well-structured summary incorporating information from BOTH sources, using Markdown in the `summaryText` field. Use headings (##) for main sections and bullet points (* or -) for details. Focus on core arguments, findings, definitions, and conclusions presented in either the transcript or the document.
+				Identify the main key points or action items discussed across both sources and list them as distinct strings in the `keyPoints` array.
+				List the 3-5 most important topics or keywords suitable for searching related content based on both sources in the `topics` array.
+				Identify important **terms, concepts, acronyms, proper nouns (people, places, organizations mentioned), and technical vocabulary** discussed in either the transcript or the document. For each, provide a concise definition relevant to the context. Structure this as an array of objects in the `glossary` field, where each object has a `term` (string) and a `definition` (string). Aim for comprehensive coverage of potentially unfamiliar items for a learner.
+				Ensure the entire output strictly adheres to the provided JSON schema. Output only the JSON object.
+				""";
+
+		Map<String, Object> promptPart = Map.of("text", prompt);
+		Map<String, Object> transcriptPart = Map.of("text", transcriptText);
+		Map<String, Object> pdfPart = Map.of("file_data",
+				Map.of("mime_type", "application/pdf", "file_uri", pdfFileUri));
+
+		List<Object> parts = List.of(promptPart, transcriptPart, pdfPart);
+		Map<String, Object> content = Map.of("parts", parts);
+		List<Object> contents = List.of(content);
+
+		Map<String, Object> generationConfig = new HashMap<>();
+		generationConfig.put("temperature", 0.4);
+		generationConfig.put("maxOutputTokens", MAX_OUTPUT_TOKENS_SUMMARIZATION);
+		generationConfig.put("response_mime_type", "application/json");
+		generationConfig.put("response_schema", SUMMARY_RESPONSE_SCHEMA);
+
+		Map<String, Object> requestBody = new HashMap<>();
+		requestBody.put("contents", contents);
+		requestBody.put("generationConfig", generationConfig);
+
+		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
+
+		log.info("[{}] Calling Gemini Summarization API (Model: {}) with transcript and PDF context (URI: {})...",
+				metadataId, modelName, pdfFileUri);
+
+		String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+				.queryParam("key", currentApiKey).buildAndExpand(modelName).toUriString();
+
+		ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST, requestEntity,
+				String.class);
+
+		log.info("[{}] Gemini Summarization API (generateContent with PDF) call successful using model {}. Status: {}",
+				metadataId, modelName, response.getStatusCode());
+
+		String responseBody = response.getBody();
+		if (responseBody == null || responseBody.isBlank()) {
+			throw new RuntimeException("API returned success status but no content");
+		}
+
+		try {
+			objectMapper.readTree(responseBody);
+			log.info("[{}] Successfully received JSON summary response (Length: {}).", metadataId,
+					responseBody.length());
+			return responseBody;
+		} catch (JsonProcessingException jsonEx) {
+			log.error("[{}] Gemini Summarization API (with PDF) response was not valid JSON. Body: {}. Error: {}",
+					metadataId, responseBody.substring(0, Math.min(responseBody.length(), 500)), jsonEx.getMessage());
+			// Bubbling up the exception to trigger fallback or retry
+			throw new RuntimeException("API response was not valid JSON: " + jsonEx.getMessage(), jsonEx);
 		}
 	}
 
@@ -1030,129 +858,19 @@ public class GeminiService {
 		try {
 			log.info("[{}] Using Google Files API URI directly: {}", metadataId, googleFileUri);
 
-			HttpHeaders generateHeaders = new HttpHeaders();
-			generateHeaders.setContentType(MediaType.APPLICATION_JSON);
-
-			String prompt = """
-					Analyze the provided lecture transcript and the accompanying PDF document.
-					Generate a comprehensive, concise, well-structured summary incorporating information from BOTH sources, using Markdown in the `summaryText` field. Use headings (##) for main sections and bullet points (* or -) for details. Focus on core arguments, findings, definitions, and conclusions presented in either the transcript or the document.
-					Identify the main key points or action items discussed across both sources and list them as distinct strings in the `keyPoints` array.
-					List the 3-5 most important topics or keywords suitable for searching related content based on both sources in the `topics` array.
-					Identify important **terms, concepts, acronyms, proper nouns (people, places, organizations mentioned), and technical vocabulary** discussed in either the transcript or the document. For each, provide a concise definition relevant to the context. Structure this as an array of objects in the `glossary` field, where each object has a `term` (string) and a `definition` (string). Aim for comprehensive coverage of potentially unfamiliar items for a learner.
-					YOU MUST RETURN VALID JSON that strictly adheres to the provided schema. Do not include any explanatory text before or after the JSON. The JSON structure must include:
-					{
-					  "summaryText": "Your markdown summary here",
-					  "keyPoints": ["key point 1", "key point 2", ...],
-					  "topics": ["topic 1", "topic 2", ...],
-					  "glossary": [
-					    {"term": "term1", "definition": "definition1"},
-					    {"term": "term2", "definition": "definition2"},
-					    ...
-					  ]
-					}
-					""";
-
-			Map<String, Object> promptPart = Map.of("text", prompt);
-			Map<String, Object> transcriptPart = Map.of("text", transcriptText);
-			Map<String, Object> pdfPart = Map.of("file_data",
-					Map.of("mime_type", "application/pdf", "file_uri", googleFileUri));
-
-			List<Object> parts = List.of(promptPart, transcriptPart, pdfPart);
-			Map<String, Object> content = Map.of("parts", parts);
-			List<Object> contents = List.of(content);
-
-			Map<String, Object> generationConfig = new HashMap<>();
-			generationConfig.put("temperature", 0.4);
-			generationConfig.put("maxOutputTokens", MAX_OUTPUT_TOKENS_SUMMARIZATION);
-			generationConfig.put("response_mime_type", "application/json");
-			generationConfig.put("response_schema", SUMMARY_RESPONSE_SCHEMA);
-
-			Map<String, Object> requestBody = new HashMap<>();
-			requestBody.put("contents", contents);
-			requestBody.put("generationConfig", generationConfig);
-
-			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
-
-			log.info(
-					"[{}] Calling Gemini Summarization API (Model: {}) with transcript and direct PDF context (URI: {})...",
-					metadataId, SUMMARIZATION_MODEL_NAME, googleFileUri);
-
-			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
-				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-						.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
+			return rotationService.executeWithInfiniteRotation(targetModel -> {
 				try {
-					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
-							requestEntity, String.class);
+					String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+					String result = callGeminiSummarizationWithPdfContextSingleModel(transcriptText, googleFileUri,
+							metadataId, targetModel, currentKey);
 					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
-					log.info(
-							"[{}] Gemini Summarization API (generateContent with direct PDF) call successful on attempt {}. Status: {}",
-							metadataId, attempt, response.getStatusCode());
-
-					String responseBody = response.getBody();
-					if (responseBody == null || responseBody.isBlank()) {
-						log.warn(
-								"[{}] Gemini Summarization API (with direct PDF) returned successful status ({}) but empty body on attempt {}.",
-								metadataId, response.getStatusCode(), attempt);
-						if (attempt == MAX_RETRIES) {
-							return createErrorResponse("Empty Response",
-									"API returned success status but no content after retries.");
-						}
-						sleepForRetry(attempt);
-						continue;
-					}
-
-					try {
-						objectMapper.readTree(responseBody);
-						log.info("[{}] Successfully received JSON summary response (Length: {}).", metadataId,
-								responseBody.length());
-						return responseBody;
-					} catch (JsonProcessingException jsonEx) {
-						log.error(
-								"[{}] Gemini Summarization API (with direct PDF) response was not valid JSON on attempt {}. Body: {}. Error: {}",
-								metadataId, attempt, responseBody.substring(0, Math.min(responseBody.length(), 500)),
-								jsonEx.getMessage());
-						if (attempt == MAX_RETRIES) {
-							return createErrorResponse("Invalid JSON Response",
-									"API response was not valid JSON: " + jsonEx.getMessage());
-						}
-						sleepForRetry(attempt);
-						continue;
-					}
-
-				} catch (HttpServerErrorException | ResourceAccessException e) {
-					log.warn(
-							"[{}] Gemini Summarization API (with direct PDF) call failed on attempt {}/{} with retryable error: {}. Retrying...",
-							metadataId, attempt, MAX_RETRIES, e.getMessage());
-					if (attempt == MAX_RETRIES) {
-						log.error("[{}] Gemini Summarization API (with direct PDF) call failed after {} attempts.",
-								metadataId, MAX_RETRIES, e);
-						return createErrorResponse("API Request Failed (Server/Network)", e.getMessage());
-					}
-					sleepForRetry(attempt);
-				} catch (HttpClientErrorException e) {
-					int statusCode = e.getStatusCode().value();
-					if (statusCode == 429 || statusCode == 403) {
-						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
-					}
-					log.error("[{}] Gemini Summarization API (with direct PDF) client error: {} - {}", metadataId,
-							e.getStatusCode(), e.getResponseBodyAsString(), e);
-					String details = parseErrorDetails(e);
-					return createErrorResponse("API Client Error: " + e.getStatusCode(), details);
-				} catch (RestClientResponseException e) {
-					log.error("[{}] Gemini Summarization API (with direct PDF) REST client error: Status {}, Body: {}",
-							metadataId, e.getStatusCode(), e.getResponseBodyAsString(), e);
-					return createErrorResponse("API Request Failed (REST Client)", e.getMessage());
-				} catch (RuntimeException e) {
-					log.error(
-							"[{}] Unexpected runtime error during Gemini Summarization (with direct PDF) processing on attempt {}: {}",
-							metadataId, attempt, e.getMessage(), e);
-					return createErrorResponse("Summarization Processing Error", e.getMessage());
+					return result;
+				} catch (Exception e) {
+					if (e instanceof RuntimeException)
+						throw (RuntimeException) e;
+					throw new RuntimeException(e);
 				}
-			}
-			return createErrorResponse("API Request Failed",
-					"Max retries reached for summarization or unexpected flow.");
+			});
 
 		} catch (Exception e) {
 			log.error("[{}] Unexpected error during combined summarization setup: {}", metadataId, e.getMessage(), e);

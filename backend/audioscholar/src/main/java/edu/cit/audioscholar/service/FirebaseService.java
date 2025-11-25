@@ -30,6 +30,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.core.ApiFuture;
+import com.google.api.gax.rpc.FailedPreconditionException;
 import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -518,6 +519,18 @@ public class FirebaseService {
 				documents = future.get().getDocuments();
 			} catch (ExecutionException | InterruptedException e) {
 				Thread.currentThread().interrupt();
+
+				// Check for missing index error
+				Throwable cause = e.getCause();
+				if (cause instanceof FailedPreconditionException && cause.getMessage() != null
+						&& cause.getMessage().contains("requires an index")) {
+					log.error("Firestore missing index error: {}", cause.getMessage());
+					// The URL is usually in the message, identifying it in logs is crucial
+					throw new FirestoreInteractionException(
+							"Database query failed due to missing index. Administrator must create the index using the link in server logs.",
+							e);
+				}
+
 				log.error("Firestore query execution failed for user ID: {}", userId, e);
 				if (e.getCause() instanceof NullPointerException && e.getCause().getMessage() != null && e.getCause()
 						.getMessage().contains("Cannot read the array length because \"value\" is null")) {

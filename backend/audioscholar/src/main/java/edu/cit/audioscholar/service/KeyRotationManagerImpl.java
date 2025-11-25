@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import edu.cit.audioscholar.exception.KeysExhaustedException;
 import edu.cit.audioscholar.model.KeyProvider;
 
 @Service
@@ -86,7 +87,6 @@ public class KeyRotationManagerImpl implements KeyRotationManager {
 		}
 
 		AtomicInteger counter = counters.get(provider);
-		int start = counter.get();
 		int size = keys.size();
 
 		// Try to find a non-cooldown key, trying each key at least once
@@ -102,15 +102,11 @@ public class KeyRotationManagerImpl implements KeyRotationManager {
 			}
 		}
 
-		// If all keys are in cooldown, force use of the "next" one anyway
-		// or throw exception. For resilience, we usually prefer to return a key
-		// and hope the rate limit has passed or we handle the error again.
-		// Alternatively, we could wait, but that blocks threads.
-		// Let's return the next one in round-robin sequence even if in cooldown,
-		// logging a warning.
-		log.warn("All keys for {} are in cooldown/rate-limited state. Returning a candidate anyway.", provider);
-		int index = Math.abs(counter.getAndIncrement() % size);
-		return keys.get(index);
+		// If all keys are in cooldown, DO NOT force use.
+		// Throw a specific exception that the listener can catch to requeue the
+		// message.
+		log.warn("All keys for {} are in cooldown/rate-limited state.", provider);
+		throw new KeysExhaustedException("All API keys for " + provider + " are currently in cooldown.");
 	}
 
 	@Override

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
@@ -100,6 +101,12 @@ public class YouTubeAPIClient {
 						}
 					}
 				}
+			} catch (GoogleJsonResponseException e) {
+				if (e.getStatusCode() == 403) {
+					log.error("YouTube API returned 403 Forbidden (Quota exceeded or API blocked). Stopping search.");
+					throw new RuntimeException("YouTube API Blocked", e);
+				}
+				log.warn("Google API error searching region {}: {}", regionCode, e.getMessage());
 			} catch (Exception e) {
 				log.warn("Error searching region {}: {}", regionCode, e.getMessage());
 			}

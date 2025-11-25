@@ -18,8 +18,6 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import edu.cit.audioscholar.model.KeyProvider;
 
 /**
@@ -38,8 +36,6 @@ class GeminiServiceTest {
 
 	@InjectMocks
 	private GeminiService geminiService;
-
-	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	private static final String API_KEY = "test-api-key";
 	private static final String PROMPT_TEXT = "Test prompt";

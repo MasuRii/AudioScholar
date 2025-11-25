@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -34,7 +35,9 @@ import com.google.firebase.messaging.MulticastMessage;
 import edu.cit.audioscholar.dto.AnalysisResults;
 import edu.cit.audioscholar.integration.YouTubeAPIClient;
 import edu.cit.audioscholar.model.LearningRecommendation;
+import edu.cit.audioscholar.model.ProcessingStatus;
 import edu.cit.audioscholar.model.Recording;
+import edu.cit.audioscholar.util.RobustTaskExecutor;
 
 @Service
 public class LearningMaterialRecommenderService {
@@ -45,7 +48,8 @@ public class LearningMaterialRecommenderService {
 	private final RecordingService recordingService;
 	private final FirebaseService firebaseService;
 	private final UserService userService;
-	private final String recommendationsCollectionName = "learningRecommendations";
+	private final String recommendationsCollectionName;
+	private final RobustTaskExecutor robustTaskExecutor;
 	private static final int MAX_RECOMMENDATIONS_TO_FETCH = 10;
 	private static final int SEARCH_RESULTS_POOL_SIZE = 50;
 	private static final String EDUCATIONAL_CONTEXT = "lecture educational tutorial";
@@ -62,13 +66,17 @@ public class LearningMaterialRecommenderService {
 
 	public LearningMaterialRecommenderService(LectureContentAnalyzerService lectureContentAnalyzerService,
 			YouTubeAPIClient youTubeAPIClient, Firestore firestore, RecordingService recordingService,
-			FirebaseService firebaseService, UserService userService) {
+			FirebaseService firebaseService, UserService userService,
+			@Value("${firebase.firestore.collection.recommendations}") String recommendationsCollectionName,
+			RobustTaskExecutor robustTaskExecutor) {
 		this.lectureContentAnalyzerService = lectureContentAnalyzerService;
 		this.youTubeAPIClient = youTubeAPIClient;
 		this.firestore = firestore;
 		this.recordingService = recordingService;
 		this.firebaseService = firebaseService;
 		this.userService = userService;
+		this.recommendationsCollectionName = recommendationsCollectionName;
+		this.robustTaskExecutor = robustTaskExecutor;
 	}
 
 	public List<LearningRecommendation> generateAndSaveRecommendations(String userId, String recordingId,
@@ -102,12 +110,61 @@ public class LearningMaterialRecommenderService {
 		log.debug("Enhanced keywords for recording ID {}: {}", recordingId, enhancedKeywords);
 
 		try {
-			List<SearchResult> youtubeResults = youTubeAPIClient.searchVideos(enhancedKeywords,
-					SEARCH_RESULTS_POOL_SIZE);
+			List<SearchResult> youtubeResults = robustTaskExecutor.executeWithInfiniteRetry(recordingId,
+					"searching YouTube videos",
+					() -> youTubeAPIClient.searchVideos(enhancedKeywords, SEARCH_RESULTS_POOL_SIZE));
+
 			if (youtubeResults.isEmpty()) {
-				log.info("YouTube search returned no results for keywords related to recording ID: {}", recordingId);
+				log.info(
+						"YouTube search returned no results (or failed) for keywords related to recording ID: {}. Proceeding with empty recommendations.",
+						recordingId);
+				// Instead of returning empty list immediately which might be interpreted as "no
+				// recs found",
+				// we should consider if we need to notify about "Completed with Warnings" here.
+				// But since this method returns a List, we return empty list.
+				// The caller (SummarizationListenerService) needs to decide status based on
+				// this list or exception.
+				// However, to support "COMPLETED_WITH_WARNINGS", we need to signal this
+				// failure.
+				// But currently, returning empty list is valid.
+				// Let's try to update status directly if we can, or rely on the fact that empty
+				// list means no recs.
+
+				// If we failed due to API block, we should probably still mark as "Complete"
+				// (or Complete with warnings)
+				// rather than "Failed".
+
+				// We will return empty list, but maybe we should update status to
+				// COMPLETED_WITH_WARNINGS here?
+				// The caller (SummarizationListenerService) calls updateMetadataStatus(...,
+				// COMPLETE, null) AFTER this method returns successfully.
+				// So if we return empty list, it will mark as COMPLETE.
+				// If we want COMPLETED_WITH_WARNINGS, we might need to change return type or
+				// update status here.
+
+				// Let's update status here if it's a failure case that we caught.
+				// But we don't have easy access to updateMetadataStatus here without
+				// duplicating logic.
+				// Best approach: Just return empty list. The system will mark as COMPLETE.
+				// "Completed with warnings" is better, but "Complete" (with 0 recs) is
+				// acceptable fallback for now to ensure flow finishes.
+				// Wait, the requirements say: "Update Firestore status to
+				// COMPLETED_WITH_WARNINGS instead of FAILED."
+
+				// To do this properly, we need to update the status.
+				updateStatusToCompletedWithWarnings(recordingId);
+
+				// Still notify user even if no recs?
+				// linkRecommendationsAndNotify handles the "success" notification.
+				// If list is empty, it won't call linkRecommendationsAndNotify (based on
+				// current logic it returns empty list).
+				// So we should manually trigger notification saying "Processing Complete" (even
+				// without recs).
+				notifyProcessingComplete(userId, recordingId, summaryId);
+
 				return Collections.emptyList();
 			}
+
 			log.info("Retrieved {} potential recommendations from YouTube for recording ID: {}", youtubeResults.size(),
 					recordingId);
 
@@ -123,6 +180,7 @@ public class LearningMaterialRecommenderService {
 			List<LearningRecommendation> recommendations = processYouTubeResults(topResults, recordingId);
 			if (recommendations.isEmpty()) {
 				log.info("No valid recommendations processed for recording ID: {}", recordingId);
+				notifyProcessingComplete(userId, recordingId, summaryId);
 				return Collections.emptyList();
 			}
 			log.info("Successfully processed {} unique recommendations for recording ID: {}", recommendations.size(),
@@ -133,6 +191,7 @@ public class LearningMaterialRecommenderService {
 			} else {
 				log.warn("No recommendations were successfully saved for recording ID: {}. Skipping linking step.",
 						recordingId);
+				notifyProcessingComplete(userId, recordingId, summaryId);
 			}
 			return savedRecommendationsWithIds;
 		} catch (Exception e) {
@@ -141,7 +200,46 @@ public class LearningMaterialRecommenderService {
 			if (e instanceof InterruptedException) {
 				Thread.currentThread().interrupt();
 			}
+			// Fallback: Mark as completed with warnings instead of failing entire flow
+			updateStatusToCompletedWithWarnings(recordingId);
+			notifyProcessingComplete(userId, recordingId, summaryId);
 			return Collections.emptyList();
+		}
+	}
+
+	private void updateStatusToCompletedWithWarnings(String recordingId) {
+		try {
+			// We need metadataId to update status. recordingId IS metadataId in this
+			// context usually.
+			// Let's assume recordingId == metadataId (which is true in this app structure)
+			Map<String, Object> updates = new HashMap<>();
+			updates.put("status", ProcessingStatus.COMPLETED_WITH_WARNINGS.name());
+			updates.put("lastUpdated", new Date()); // Using Date here, Firestore handles it
+			firestore.collection("audio_metadata").document(recordingId).update(updates);
+			log.info("Updated status to COMPLETED_WITH_WARNINGS for recording ID: {}", recordingId);
+		} catch (Exception e) {
+			log.error("Failed to update status to COMPLETED_WITH_WARNINGS for recording ID: {}", recordingId, e);
+		}
+	}
+
+	private void notifyProcessingComplete(String userId, String recordingId, String summaryId) {
+		// If we have no recommendations, we still want to notify user that processing
+		// is done.
+		// We can reuse logic from linkRecommendationsAndNotify but skip the linking
+		// part.
+		log.info("Sending completion notification (without recommendations) for user: {}, recording: {}", userId,
+				recordingId);
+		try {
+			List<String> tokensToSend = userService.getFcmTokensForUser(userId);
+			if (tokensToSend != null && !tokensToSend.isEmpty()) {
+				MulticastMessage message = firebaseService.buildProcessingCompleteMessage(userId, recordingId,
+						summaryId);
+				if (message != null) {
+					firebaseService.sendFcmMessage(message, tokensToSend, userId);
+				}
+			}
+		} catch (Exception e) {
+			log.warn("Failed to send completion notification: {}", e.getMessage());
 		}
 	}
 

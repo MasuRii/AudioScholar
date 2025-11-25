@@ -4,6 +4,7 @@ import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -133,5 +134,17 @@ public class RabbitMQConfig {
 		final RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
 		rabbitTemplate.setMessageConverter(messageConverter);
 		return rabbitTemplate;
+	}
+
+	@Bean("summarizationContainerFactory")
+	public SimpleRabbitListenerContainerFactory summarizationContainerFactory(ConnectionFactory connectionFactory,
+			MessageConverter messageConverter) {
+		SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
+		factory.setConnectionFactory(connectionFactory);
+		factory.setMessageConverter(messageConverter);
+		factory.setConcurrentConsumers(1); // STRICT LIMIT: 1 concurrent consumer
+		factory.setMaxConcurrentConsumers(1); // Do not scale up
+		factory.setPrefetchCount(1);
+		return factory;
 	}
 }
