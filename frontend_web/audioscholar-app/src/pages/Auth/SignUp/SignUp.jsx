@@ -10,12 +10,57 @@ const SignUp = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [passwordRules, setPasswordRules] = useState({
+    length: false,
+    upper: false,
+    lower: false,
+    number: false,
+    special: false,
+  });
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [backendError, setBackendError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const navigate = useNavigate();
   const auth = getAuth(firebaseApp);
+
+  const updatePasswordRules = (value) => {
+    const rules = {
+      length: value.length >= 8,
+      upper: /[A-Z]/.test(value),
+      lower: /[a-z]/.test(value),
+      number: /[0-9]/.test(value),
+      special: /[^A-Za-z0-9]/.test(value),
+    };
+    setPasswordRules(rules);
+    return rules;
+  };
+
+  const handlePasswordChange = (value) => {
+    setPassword(value);
+    if (!passwordTouched) {
+      setPasswordTouched(true);
+    }
+    updatePasswordRules(value);
+  };
+
+  const isPasswordStrong = (rules) =>
+    rules.length && rules.upper && rules.lower && rules.number && rules.special;
+
+  const getPasswordStrength = () => {
+    const score = Object.values(passwordRules).filter(Boolean).length;
+    if (!passwordTouched || !password) {
+      return { label: '', color: 'bg-gray-200', score: 0 };
+    }
+
+    if (score <= 2) return { label: 'Weak password', color: 'bg-red-500', score };
+    if (score === 3 || score === 4)
+      return { label: 'Medium strength password', color: 'bg-yellow-500', score };
+    return { label: 'Strong password', color: 'bg-green-500', score };
+  };
+
+  const passwordStrength = getPasswordStrength();
 
   const handleSignUp = async (e) => {
     e.preventDefault();
@@ -29,11 +74,6 @@ const SignUp = () => {
       return;
     }
 
-    if (password.length < 8) {
-      setFormError('Password must be at least 8 characters long.');
-      return;
-    }
-
     if (!/\S+@\S+\.\S+/.test(email)) {
       setFormError('Please enter a valid email address.');
       return;
@@ -44,6 +84,11 @@ const SignUp = () => {
       return;
     }
 
+    const latestRules = updatePasswordRules(password);
+    if (!isPasswordStrong(latestRules)) {
+      setFormError('Password must be at least 8 characters and include uppercase, lowercase, number, and symbol.');
+      return;
+    }
 
     setLoading(true);
 
@@ -155,9 +200,41 @@ const SignUp = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
                     placeholder="Create a password"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
                     required
                   />
+                  <div className="mt-2">
+                    {passwordTouched && password && (
+                      <>
+                        <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${passwordStrength.color} transition-all`}
+                            style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
+                          />
+                        </div>
+                        {passwordStrength.label && (
+                          <p className="mt-1 text-xs font-medium text-gray-600">{passwordStrength.label}</p>
+                        )}
+                      </>
+                    )}
+                    <ul className="mt-2 space-y-1 text-xs">
+                      <li className={passwordRules.length ? 'text-green-600' : 'text-gray-500'}>
+                        At least 8 characters
+                      </li>
+                      <li className={passwordRules.upper ? 'text-green-600' : 'text-gray-500'}>
+                        Contains an uppercase letter (A-Z)
+                      </li>
+                      <li className={passwordRules.lower ? 'text-green-600' : 'text-gray-500'}>
+                        Contains a lowercase letter (a-z)
+                      </li>
+                      <li className={passwordRules.number ? 'text-green-600' : 'text-gray-500'}>
+                        Contains a number (0-9)
+                      </li>
+                      <li className={passwordRules.special ? 'text-green-600' : 'text-gray-500'}>
+                        Contains a symbol (e.g. !@#$%)
+                      </li>
+                    </ul>
+                  </div>
                 </div>
 
                 {formError && (
