@@ -10,16 +10,20 @@ export const Header = () => {
     const { theme, toggleTheme } = useTheme();
     const [user, setUser] = useState(null);
 
-    useEffect(() => {
+    const loadUser = React.useCallback(() => {
         const token = localStorage.getItem('AuthToken');
         setIsAuthenticated(!!token);
 
-        if (token) {
-            fetch(`${API_BASE_URL}api/users/me`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
+        if (!token) {
+            setUser(null);
+            return;
+        }
+
+        fetch(`${API_BASE_URL}api/users/me`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        })
             .then(res => {
                 if (!res.ok) throw new Error('Failed to fetch user');
                 return res.json();
@@ -30,8 +34,22 @@ export const Header = () => {
             .catch(err => {
                 console.error("Failed to fetch user info for header:", err);
             });
-        }
     }, []);
+
+    useEffect(() => {
+        loadUser();
+    }, [loadUser]);
+
+    useEffect(() => {
+        const handleProfileUpdated = () => {
+            loadUser();
+        };
+
+        window.addEventListener('user-profile-updated', handleProfileUpdated);
+        return () => {
+            window.removeEventListener('user-profile-updated', handleProfileUpdated);
+        };
+    }, [loadUser]);
 
     const handleLogout = async () => {
         const token = localStorage.getItem('AuthToken'); // Get token before clearing
@@ -103,16 +121,12 @@ export const Header = () => {
                                 <FiUpload className="w-4 h-4" /> Upload
                             </Link>
                             <Link to="/profile" className="flex items-center gap-1.5 font-inter font-medium text-sm leading-5 tracking-tight text-white hover:text-indigo-600 hover:bg-white transition-all duration-200 px-3 py-1.5 rounded-md">
-                                {user && user.profileImageUrl ? (
-                                    <img 
-                                        src={user.profileImageUrl} 
-                                        alt="Profile" 
-                                        className="w-5 h-5 rounded-full object-cover border border-gray-300"
-                                        referrerPolicy="no-referrer"
-                                    />
-                                ) : (
-                                    <FiUser className="w-4 h-4" />
-                                )}
+                                <img
+                                    src={user?.profileImageUrl || '/icon-512.png'}
+                                    alt="Profile"
+                                    className="w-5 h-5 rounded-full object-cover border border-gray-300 bg-white"
+                                    referrerPolicy="no-referrer"
+                                />
                                 <span>{user?.firstName || 'Profile'}</span>
                             </Link>
                             <button
