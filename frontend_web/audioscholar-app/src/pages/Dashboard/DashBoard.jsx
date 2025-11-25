@@ -4,42 +4,45 @@ import { Header } from '../Home/HomePage';
 
 const Dashboard = () => {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+
       <title>AudioScholar - Dashboard</title>
       <Header />
 
-      <main className="flex-grow bg-gray-50">
+      <main className="flex-grow">
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-6xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-800 mb-10">Dashboard</h1>
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-10">Dashboard</h1>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <Link
                 to="/upload"
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-1 cursor-pointer border border-gray-200"
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-1 cursor-pointer border border-gray-200 dark:border-gray-700"
               >
+
                 <div className="flex items-center mb-4">
                   <div className="bg-teal-100 p-3 rounded-full mr-4">
                     <FiUpload className="h-6 w-6 text-teal-600" />
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-800">Upload Audio</h2>
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Upload Audio</h2>
                 </div>
-                <p className="text-gray-600">Upload new audio files to generate summaries and notes.</p>
+                <p className="text-gray-600 dark:text-gray-300">Upload new audio files to generate summaries and notes.</p>
               </Link>
 
               <Link
                 to="/recordings"
-                className="bg-white rounded-lg shadow-md p-6 hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-1 cursor-pointer border border-gray-200"
+                className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-xl transition-all duration-300 ease-in-out transform hover:-translate-y-1 cursor-pointer border border-gray-200 dark:border-gray-700"
               >
+
                 <div className="flex items-center mb-4">
                   <div className="bg-blue-100 p-3 rounded-full mr-4">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                     </svg>
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-800">Recording List</h2>
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">Recording List</h2>
                 </div>
-                <p className="text-gray-600">View and manage all your audio recordings.</p>
+                <p className="text-gray-600 dark:text-gray-300">View and manage all your audio recordings.</p>
               </Link>
 
             </div>
@@ -47,8 +50,9 @@ const Dashboard = () => {
         </div>
       </main>
 
-      <footer className="bg-gray-100 py-12">
+      <footer className="bg-gray-100 dark:bg-gray-800 py-12">
       </footer>
+
     </div>
   );
 };

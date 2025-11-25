@@ -145,12 +145,12 @@ export const Header = () => {
 
 const HeroSection = () => {
     return (
-        <section className="py-20 bg-gradient-to-r from-blue-50 to-teal-50 animate-fade-in-up">
+        <section className="py-20 bg-gradient-to-r from-blue-50 to-teal-50 dark:from-gray-900 dark:to-gray-800 animate-fade-in-up">
             <div className="container mx-auto px-4 text-center">
-                <h1 className="font-montserrat font-bold text-4xl md:text-5xl leading-tight tracking-normal text-gray-800 mb-4">
-                    Stop Taking Notes, Start <span className="text-[#1A365D]">Actively Listening</span>.
+                <h1 className="font-montserrat font-bold text-4xl md:text-5xl leading-tight tracking-normal text-gray-900 dark:text-gray-50 mb-4">
+                    Stop Taking Notes, Start <span className="text-[#1A365D] dark:text-teal-300">Actively Listening</span>.
                 </h1>
-                <p className="font-montserrat font-semibold text-lg md:text-xl leading-relaxed tracking-normal text-gray-600 max-w-3xl mx-auto mb-8">
+                <p className="font-montserrat font-semibold text-lg md:text-xl leading-relaxed tracking-normal text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-8">
                     Traditional note-taking is inefficient. AudioScholar records lectures and uses AI to generate smart summaries,
                     so you can focus on understanding in class and get organized study materials automatically.
                 </p>
@@ -197,19 +197,19 @@ const Features = () => {
     ];
 
     return (
-        <section className="py-16 bg-teal-50">
+        <section className="py-16 bg-teal-50 dark:bg-gray-900">
             <div className="container mx-auto px-4">
-                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-[#1A365D] mb-12 animate-fade-in-up">How AudioScholar Makes Learning Efficient</h2>
+                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-[#1A365D] dark:text-teal-300 mb-12 animate-fade-in-up">How AudioScholar Makes Learning Efficient</h2>
                 <div className="grid md:grid-cols-3 gap-8">
                     {features.map((feature, index) => (
-                        <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow transform hover:scale-105 animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                        <div key={index} className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow transform hover:scale-105 animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
                             <div className="flex items-center mb-4">
                                 <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mr-4">
                                     {feature.icon}
                                 </div>
-                                <h3 className="font-inter font-semibold text-lg leading-6 tracking-tight text-teal-700">{feature.title}</h3>
+                                <h3 className="font-inter font-semibold text-lg leading-6 tracking-tight text-teal-700 dark:text-teal-300">{feature.title}</h3>
                             </div>
-                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-600">
+                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-600 dark:text-gray-300">
                                 {feature.description}
                             </p>
                         </div>
