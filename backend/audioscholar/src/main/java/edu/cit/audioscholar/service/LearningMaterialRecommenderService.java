@@ -215,7 +215,7 @@ public class LearningMaterialRecommenderService {
 			Map<String, Object> updates = new HashMap<>();
 			updates.put("status", ProcessingStatus.COMPLETED_WITH_WARNINGS.name());
 			updates.put("lastUpdated", new Date()); // Using Date here, Firestore handles it
-			firestore.collection("audio_metadata").document(recordingId).update(updates);
+			firestore.collection("audio_metadata").document(Objects.requireNonNull(recordingId)).update(updates);
 			log.info("Updated status to COMPLETED_WITH_WARNINGS for recording ID: {}", recordingId);
 		} catch (Exception e) {
 			log.error("Failed to update status to COMPLETED_WITH_WARNINGS for recording ID: {}", recordingId, e);
@@ -252,7 +252,8 @@ public class LearningMaterialRecommenderService {
 		try {
 			WriteBatch batch = firestore.batch();
 			for (LearningRecommendation recommendation : recommendations) {
-				DocumentReference docRef = firestore.collection(recommendationsCollectionName).document();
+				DocumentReference docRef = firestore.collection(Objects.requireNonNull(recommendationsCollectionName))
+						.document();
 				recommendation.setRecommendationId(docRef.getId());
 				batch.set(docRef, recommendation);
 				recommendationsWithIds.add(recommendation);
@@ -534,7 +535,8 @@ public class LearningMaterialRecommenderService {
 		log.info("Attempting to retrieve recommendations for recording ID: {} using native client", recordingId);
 		List<LearningRecommendation> recommendations = new ArrayList<>();
 		try {
-			ApiFuture<QuerySnapshot> future = firestore.collection(recommendationsCollectionName)
+			ApiFuture<QuerySnapshot> future = firestore
+					.collection(Objects.requireNonNull(recommendationsCollectionName))
 					.whereEqualTo("recordingId", recordingId).get();
 			QuerySnapshot querySnapshot = future.get();
 			List<QueryDocumentSnapshot> documents = querySnapshot.getDocuments();
@@ -581,7 +583,8 @@ public class LearningMaterialRecommenderService {
 			return;
 		}
 		log.warn("Attempting to delete ALL recommendations for recording ID: {}", recordingId);
-		CollectionReference recommendationsRef = firestore.collection(recommendationsCollectionName);
+		CollectionReference recommendationsRef = firestore
+				.collection(Objects.requireNonNull(recommendationsCollectionName));
 		Query query = recommendationsRef.whereEqualTo("recordingId", recordingId);
 		ApiFuture<QuerySnapshot> future = query.get();
 		int deletedCount = 0;
@@ -621,7 +624,8 @@ public class LearningMaterialRecommenderService {
 		}
 		log.info("Attempting to delete LearningRecommendation with ID: {}", recommendationId);
 		try {
-			DocumentReference docRef = firestore.collection(recommendationsCollectionName).document(recommendationId);
+			DocumentReference docRef = firestore.collection(Objects.requireNonNull(recommendationsCollectionName))
+					.document(recommendationId);
 			ApiFuture<WriteResult> future = docRef.delete();
 			future.get();
 			log.info("Successfully deleted LearningRecommendation with ID: {}", recommendationId);

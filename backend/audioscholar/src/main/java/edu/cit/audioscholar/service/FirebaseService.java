@@ -963,7 +963,8 @@ public class FirebaseService {
 			throw new IllegalArgumentException("Metadata ID and Status cannot be null.");
 		}
 
-		DocumentReference docRef = getFirestore().collection(audioMetadataCollectionName).document(metadataId);
+		DocumentReference docRef = getFirestore().collection(Objects.requireNonNull(audioMetadataCollectionName))
+				.document(metadataId);
 		Map<String, Object> updates = new HashMap<>();
 		updates.put("status", status.name());
 		updates.put("lastUpdated", Timestamp.now());
