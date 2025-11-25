@@ -196,21 +196,22 @@ const CheckoutPage = () => {
                         </button>
                     </div>
                     {showSuccessModal && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                            <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-6">
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm transition-opacity">
+                            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-8 animate-scale-in relative overflow-hidden">
+                                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-teal-400 to-teal-600"></div>
                                 <div className="flex flex-col items-center text-center">
-                                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                                        <svg className="w-7 h-7 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mb-6 shadow-inner">
+                                        <svg className="w-8 h-8 text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
-                                    <h2 className="text-xl font-bold text-gray-900 mb-2">{successMessage || 'Purchase complete'}</h2>
-                                    <p className="text-sm text-gray-600 mb-4">
-                                        {secondaryMessage || 'Your Premium membership details have been updated.'}
+                                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{successMessage || 'Purchase Complete!'}</h2>
+                                    <p className="text-gray-600 mb-8 leading-relaxed">
+                                        {secondaryMessage || 'Your Premium membership is now active. Enjoy your enhanced learning experience!'}
                                     </p>
                                     <button
                                         onClick={handleCloseSuccessModal}
-                                        className="w-full mt-2 py-2.5 px-4 rounded-md text-sm font-medium text-white bg-[#2D8A8A] hover:bg-[#236b6b] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D8A8A] transition-colors"
+                                        className="w-full py-3 px-4 rounded-lg text-base font-semibold text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
                                     >
                                         Go to Profile
                                     </button>

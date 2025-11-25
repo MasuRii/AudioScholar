@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FiCalendar, FiCreditCard, FiLock, FiUser } from 'react-icons/fi';
+import { FaCcVisa, FaCcMastercard, FaCcAmex } from 'react-icons/fa';
 
 const CardPaymentForm = ({ onSubmit }) => {
     const [cardDetails, setCardDetails] = useState({
@@ -76,7 +77,14 @@ const CardPaymentForm = ({ onSubmit }) => {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
+                <div className="flex justify-between items-center mb-1">
+                    <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700">Card Number</label>
+                    <div className="flex space-x-1 text-gray-400">
+                        <FaCcVisa className="h-5 w-5" />
+                        <FaCcMastercard className="h-5 w-5" />
+                        <FaCcAmex className="h-5 w-5" />
+                    </div>
+                </div>
                 <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <FiCreditCard className="h-5 w-5 text-gray-400" />
@@ -151,7 +159,7 @@ const CardPaymentForm = ({ onSubmit }) => {
                         id="nameOnCard"
                         value={cardDetails.nameOnCard}
                         onChange={handleChange}
-                        placeholder="FULL NAME"
+                        placeholder="John Doe"
                         className={`block w-full pl-10 pr-3 py-2 border ${errors.nameOnCard ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
                         required
                     />

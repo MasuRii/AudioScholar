@@ -1,6 +1,6 @@
 import { FiUpload } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
-import { Header } from '../Home/HomePage';
+import { Header, Footer } from '../Home/HomePage';
 
 const Dashboard = () => {
   return (
@@ -50,8 +50,7 @@ const Dashboard = () => {
         </div>
       </main>
 
-      <footer className="bg-gray-100 dark:bg-gray-800 py-12">
-      </footer>
+      <Footer />
 
     </div>
   );

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../../services/authService';
 
@@ -8,12 +8,16 @@ const GithubAuthCallback = () => {
   const [error, setError] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const verificationAttempted = useRef(false);
 
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
     const code = queryParams.get('code');
     const githubError = queryParams.get('error');
     const errorDescription = queryParams.get('error_description');
+
+    if (verificationAttempted.current) return;
+    verificationAttempted.current = true;
 
     if (githubError) {
       console.error(`GitHub OAuth Error: ${githubError} - ${errorDescription}`);

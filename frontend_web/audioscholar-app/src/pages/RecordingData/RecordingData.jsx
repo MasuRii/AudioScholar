@@ -1,9 +1,9 @@
 import axios from 'axios';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { FiExternalLink, FiCopy, FiCheck, FiEdit, FiSave, FiX, FiLoader, FiAlertTriangle, FiCheckCircle, FiUploadCloud, FiClock } from 'react-icons/fi';
-import { toast } from 'react-toastify';
-import { API_BASE_URL } from '../../config';
+import { FiExternalLink, FiCopy, FiCheck, FiEdit, FiSave, FiX, FiLoader, FiAlertTriangle, FiCheckCircle, FiUploadCloud, FiClock, FiHeadphones, FiDownload, FiEye, FiEdit2 } from 'react-icons/fi';
+import ReactMarkdown from 'react-markdown';
+import { API_BASE_URL } from '../../services/authService';
 import { Header } from '../Home/HomePage';
 
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>;
@@ -217,6 +217,10 @@ const RecommendationCardImage = ({ thumbnailUrl, fallbackThumbnailUrl, title }) 
     />
   );
 };
+
+const Skeleton = ({ className }) => (
+  <div className={`animate-pulse bg-gray-200 dark:bg-gray-700 rounded ${className}`}></div>
+);
 
 const RecordingData = () => {
   const { id } = useParams();
@@ -802,7 +806,31 @@ const RecordingData = () => {
           <div className="bg-white rounded-lg shadow p-6 md:p-8 min-h-[300px] max-h-[700px] overflow-auto">
             {activeTab === 'summary' && (
               <div>
-                {summaryLoading && <p className="text-gray-600 flex items-center"><FiLoader className="animate-spin mr-2" />Loading summary...</p>}
+                {summaryLoading && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="md:col-span-2 space-y-4">
+                      <Skeleton className="h-6 w-1/3 mb-4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                      <Skeleton className="h-4 w-full mt-4" />
+                      <Skeleton className="h-4 w-4/5" />
+                    </div>
+                    <div className="space-y-6 border-t md:border-t-0 md:border-l border-gray-200 pt-6 md:pt-0 md:pl-6">
+                       <div className="space-y-2">
+                          <Skeleton className="h-5 w-1/2 mb-2" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-3/4" />
+                       </div>
+                       <div className="space-y-2">
+                          <Skeleton className="h-5 w-1/2 mb-2" />
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-5/6" />
+                       </div>
+                    </div>
+                  </div>
+                )}
                 {summaryError && !summaryLoading && (
                   <div className="text-center py-10 px-4">
                     <FiAlertTriangle className="mx-auto h-10 w-10 text-yellow-500 mb-3" />
@@ -930,7 +958,19 @@ const RecordingData = () => {
 
           <div className="mt-10">
             <h2 className="text-2xl font-semibold text-gray-800 mb-5">Learning Recommendations</h2>
-            {recommendationsLoading && <p className="text-gray-600 flex items-center"><FiLoader className="animate-spin mr-2" />Loading recommendations...</p>}
+            {recommendationsLoading && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                   {[...Array(4)].map((_, i) => (
+                      <div key={i} className="border border-gray-200 rounded-lg overflow-hidden">
+                         <Skeleton className="w-full h-32" />
+                         <div className="p-3 space-y-2">
+                            <Skeleton className="h-4 w-3/4" />
+                            <Skeleton className="h-3 w-1/2" />
+                         </div>
+                      </div>
+                   ))}
+                </div>
+            )}
             {recommendationsError && !recommendationsLoading && (
               <div className="bg-white rounded-lg shadow p-6 text-center">
                 <FiAlertTriangle className="mx-auto h-8 w-8 text-yellow-500 mb-2" />
@@ -975,4 +1015,4 @@ const RecordingData = () => {
   );
 };
 
-export default RecordingData; 
+export default RecordingData;

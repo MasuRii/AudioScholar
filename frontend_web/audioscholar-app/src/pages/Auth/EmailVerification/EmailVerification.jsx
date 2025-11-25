@@ -35,7 +35,8 @@ const EmailVerification = () => {
                     error?.code === 'auth/invalid-action-code' ||
                     error?.code === 'auth/code-expired' ||
                     (typeof error?.message === 'string' &&
-                        error.message.toLowerCase().includes('already been used'))
+                        (error.message.toLowerCase().includes('already been used') || 
+                         error.message.toLowerCase().includes('verified')))
                 ) {
                     setStatus('success');
                     setMessage('Your email address is already verified.');
