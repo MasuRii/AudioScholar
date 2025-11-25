@@ -305,8 +305,7 @@ fun ColorScheme.isLight(): Boolean {
     return this.background.luminance() > 0.5f
 }
 
-@Composable
-fun Modifier.rotate(degrees: Float): Modifier = this.then(graphicsLayer(rotationZ = degrees))
+fun Modifier.rotate(degrees: Float): Modifier = this.graphicsLayer(rotationZ = degrees)
 
 @Preview(showBackground = true)
 @Composable

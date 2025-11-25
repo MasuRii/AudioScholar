@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FiCalendar, FiCreditCard, FiLock, FiUser } from 'react-icons/fi';
 
 const CardPaymentForm = ({ onSubmit }) => {
     const [cardDetails, setCardDetails] = useState({
@@ -25,6 +26,8 @@ const CardPaymentForm = ({ onSubmit }) => {
             }
         } else if (name === 'cvv') {
             formattedValue = value.replace(/\D/g, '').slice(0, 4);
+        } else if (name === 'nameOnCard') {
+            formattedValue = value.toUpperCase();
         }
 
         setCardDetails(prev => ({ ...prev, [name]: formattedValue }));
@@ -34,10 +37,23 @@ const CardPaymentForm = ({ onSubmit }) => {
         }
     };
 
+    const validateExpiryDate = (expiryDate) => {
+        if (!/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(expiryDate)) return false;
+        
+        const [month, year] = expiryDate.split('/').map(num => parseInt(num, 10));
+        const currentYear = new Date().getFullYear() % 100; // Last 2 digits
+        const currentMonth = new Date().getMonth() + 1;
+
+        if (year < currentYear) return false;
+        if (year === currentYear && month < currentMonth) return false;
+        
+        return true;
+    };
+
     const validateForm = () => {
         const newErrors = {};
         if (!cardDetails.cardNumber || cardDetails.cardNumber.replace(/\s/g, '').length < 13) newErrors.cardNumber = 'Valid card number required'; // Basic length check
-        if (!cardDetails.expiryDate || !/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(cardDetails.expiryDate)) newErrors.expiryDate = 'Valid expiry date (MM/YY) required';
+        if (!cardDetails.expiryDate || !validateExpiryDate(cardDetails.expiryDate)) newErrors.expiryDate = 'Valid expiry date (MM/YY) required and cannot be in the past';
         if (!cardDetails.cvv || cardDetails.cvv.length < 3) newErrors.cvv = 'Valid CVV required';
         if (!cardDetails.nameOnCard.trim()) newErrors.nameOnCard = 'Name on card required';
         setErrors(newErrors);
@@ -60,66 +76,86 @@ const CardPaymentForm = ({ onSubmit }) => {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700">Card Number</label>
-                <input
-                    type="text"
-                    name="cardNumber"
-                    id="cardNumber"
-                    value={cardDetails.cardNumber}
-                    onChange={handleChange}
-                    placeholder="XXXX XXXX XXXX XXXX"
-                    maxLength="19"
-                    className={`mt-1 block w-full px-3 py-2 border ${errors.cardNumber ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
-                    required
-                />
+                <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 mb-1">Card Number</label>
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FiCreditCard className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                        type="text"
+                        name="cardNumber"
+                        id="cardNumber"
+                        value={cardDetails.cardNumber}
+                        onChange={handleChange}
+                        placeholder="XXXX XXXX XXXX XXXX"
+                        maxLength="19"
+                        className={`block w-full pl-10 pr-3 py-2 border ${errors.cardNumber ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                        required
+                    />
+                </div>
                 {errors.cardNumber && <p className="mt-1 text-xs text-red-600">{errors.cardNumber}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700">Expiry Date</label>
-                    <input
-                        type="text"
-                        name="expiryDate"
-                        id="expiryDate"
-                        value={cardDetails.expiryDate}
-                        onChange={handleChange}
-                        placeholder="MM/YY"
-                        maxLength="5"
-                        className={`mt-1 block w-full px-3 py-2 border ${errors.expiryDate ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
-                        required
-                    />
+                    <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <FiCalendar className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            type="text"
+                            name="expiryDate"
+                            id="expiryDate"
+                            value={cardDetails.expiryDate}
+                            onChange={handleChange}
+                            placeholder="MM/YY"
+                            maxLength="5"
+                            className={`block w-full pl-10 pr-3 py-2 border ${errors.expiryDate ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                            required
+                        />
+                    </div>
                     {errors.expiryDate && <p className="mt-1 text-xs text-red-600">{errors.expiryDate}</p>}
                 </div>
                 <div>
-                    <label htmlFor="cvv" className="block text-sm font-medium text-gray-700">CVV</label>
-                    <input
-                        type="text" // Use text to allow controlling length easily
-                        name="cvv"
-                        id="cvv"
-                        value={cardDetails.cvv}
-                        onChange={handleChange}
-                        placeholder="123"
-                        maxLength="4"
-                        className={`mt-1 block w-full px-3 py-2 border ${errors.cvv ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
-                        required
-                    />
+                    <label htmlFor="cvv" className="block text-sm font-medium text-gray-700 mb-1">CVV</label>
+                    <div className="relative">
+                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <FiLock className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            type="text" // Use text to allow controlling length easily
+                            name="cvv"
+                            id="cvv"
+                            value={cardDetails.cvv}
+                            onChange={handleChange}
+                            placeholder="123"
+                            maxLength="4"
+                            className={`block w-full pl-10 pr-3 py-2 border ${errors.cvv ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                            required
+                        />
+                    </div>
                     {errors.cvv && <p className="mt-1 text-xs text-red-600">{errors.cvv}</p>}
                 </div>
             </div>
 
             <div>
-                <label htmlFor="nameOnCard" className="block text-sm font-medium text-gray-700">Name on Card</label>
-                <input
-                    type="text"
-                    name="nameOnCard"
-                    id="nameOnCard"
-                    value={cardDetails.nameOnCard}
-                    onChange={handleChange}
-                    placeholder="Full Name"
-                    className={`mt-1 block w-full px-3 py-2 border ${errors.nameOnCard ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
-                    required
-                />
+                <label htmlFor="nameOnCard" className="block text-sm font-medium text-gray-700 mb-1">Name on Card</label>
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FiUser className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                        type="text"
+                        name="nameOnCard"
+                        id="nameOnCard"
+                        value={cardDetails.nameOnCard}
+                        onChange={handleChange}
+                        placeholder="FULL NAME"
+                        className={`block w-full pl-10 pr-3 py-2 border ${errors.nameOnCard ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                        required
+                    />
+                </div>
                 {errors.nameOnCard && <p className="mt-1 text-xs text-red-600">{errors.nameOnCard}</p>}
             </div>
 

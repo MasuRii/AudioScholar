@@ -37,8 +37,22 @@ class PreviewAuthRepository : AuthRepository {
     override suspend fun changePassword(request: ChangePasswordRequest) = 
         Resource.Loading<Unit>()
         
-    override suspend fun logout() = 
+    override suspend fun logout() =
+        Resource.Loading<Unit>()
+
+    override fun saveAuthToken(token: String) {}
+
+    override fun sendPasswordResetEmail(email: String) =
+        flowOf(Resource.Loading<Unit>())
+
+    override suspend fun applyActionCode(code: String) =
+        Resource.Loading<Unit>()
+
+    override suspend fun verifyPasswordResetCode(code: String) =
+        Resource.Loading<String>()
+
+    override suspend fun confirmPasswordReset(code: String, newPassword: String) =
         Resource.Loading<Unit>()
         
     override suspend fun clearLocalUserCache() {}
-} 
+}

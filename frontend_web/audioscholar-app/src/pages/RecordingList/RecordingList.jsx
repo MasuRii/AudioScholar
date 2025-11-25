@@ -1,21 +1,26 @@
 import axios from 'axios';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud, FiSearch } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
 import { Header } from '../Home/HomePage';
 
-const TERMINAL_STATUSES = ['COMPLETE', 'COMPLETED', 'FAILED', 'PROCESSING_HALTED_UNSUITABLE_CONTENT', 'PROCESSING_HALTED_NO_SPEECH'];
+const TERMINAL_STATUSES = ['COMPLETE', 'COMPLETED', 'FAILED', 'PROCESSING_HALTED_UNSUITABLE_CONTENT', 'PROCESSING_HALTED_NO_SPEECH', 'SUMMARY_FAILED'];
 const UPLOADING_STATUSES = ['UPLOAD_PENDING', 'UPLOAD_IN_PROGRESS', 'UPLOADING_TO_STORAGE', 'UPLOADED'];
 const UPLOAD_TIMEOUT_SECONDS = 10 * 60;
 
 const RecordingList = () => {
     const [recordings, setRecordings] = useState([]);
+    const [filteredRecordings, setFilteredRecordings] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
     const pollIntervalRef = useRef(null);
     const isMountedRef = useRef(true);
+    const deletedIdsRef = useRef(new Set());
+
+    // ... (existing fetchRecordings, startPolling, useEffect, handleDelete, handleDeleteAllRecordings, formatDate, getStatusBadge code remains same until return)
 
     const fetchRecordings = useCallback(async () => {
         console.log("Fetching recordings...");
@@ -33,7 +38,10 @@ const RecordingList = () => {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            const sortedRecordings = response.data.sort((a, b) =>
+            // Filter out locally deleted items
+            const validRecordings = response.data.filter(rec => !deletedIdsRef.current.has(rec.id));
+
+            const sortedRecordings = validRecordings.sort((a, b) =>
                 (b.uploadTimestamp?.seconds ?? 0) - (a.uploadTimestamp?.seconds ?? 0)
             );
 
@@ -131,9 +139,20 @@ const RecordingList = () => {
     useEffect(() => {
         isMountedRef.current = true;
         setLoading(true);
+
+        const cachedRecordings = localStorage.getItem('recording_list');
+        if (cachedRecordings) {
+            const parsed = JSON.parse(cachedRecordings);
+            setRecordings(parsed);
+            setFilteredRecordings(parsed); // Initialize filtered
+        }
+
         fetchRecordings().then(initialData => {
             if (initialData && isMountedRef.current) {
+                localStorage.setItem('recording_list', JSON.stringify(initialData));
                 setRecordings(initialData);
+                // Filter immediately
+                setFilteredRecordings(initialData);
                 startPolling(initialData);
             }
             if (isMountedRef.current) {
@@ -151,34 +170,49 @@ const RecordingList = () => {
         };
     }, [fetchRecordings, startPolling]);
 
+    // Update filtered recordings when search query or recordings change
+    useEffect(() => {
+        const lowerQuery = searchQuery.toLowerCase();
+        const filtered = recordings.filter(rec => 
+            (rec.title && rec.title.toLowerCase().includes(lowerQuery)) ||
+            (rec.description && rec.description.toLowerCase().includes(lowerQuery))
+        );
+        setFilteredRecordings(filtered);
+    }, [searchQuery, recordings]);
+
+
     const handleDelete = async (idToDelete) => {
         if (!window.confirm('Are you sure you want to delete this recording and its summary? This action cannot be undone.')) {
             return;
         }
 
+        // Optimistic update
+        deletedIdsRef.current.add(idToDelete);
+        const updatedRecordings = recordings.filter(rec => rec.id !== idToDelete);
+        setRecordings(updatedRecordings);
+
         const token = localStorage.getItem('AuthToken');
         if (!token) {
+            // Revert optimistic update if no token
+            deletedIdsRef.current.delete(idToDelete);
+            fetchRecordings().then(data => data && setRecordings(data));
             setError("Authentication required.");
             navigate('/signin');
             return;
         }
 
         try {
-
             const url = `${API_BASE_URL}api/audio/metadata/${idToDelete}`;
-            const response = await axios.delete(url, {
+            await axios.delete(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
-            if (response.status === 200 || response.status === 204) {
-                setRecordings(prev => prev.filter(rec => rec.id !== idToDelete));
-                setError(null);
-                console.log(`Recording ${idToDelete} deleted successfully.`);
-            } else {
-                throw new Error(`Failed to delete. Status: ${response.status}`);
-            }
+            console.log(`Recording ${idToDelete} deleted successfully (Backend).`);
         } catch (err) {
             console.error('Error deleting recording:', err);
+            // Revert optimistic update on failure
+            deletedIdsRef.current.delete(idToDelete);
+            fetchRecordings().then(data => data && setRecordings(data));
+
             if (err.response && (err.response.status === 401 || err.response.status === 403)) {
                 setError("Session expired or not authorized. Please log in again.");
                 localStorage.removeItem('AuthToken');
@@ -207,9 +241,18 @@ const RecordingList = () => {
             return;
         }
 
-        setLoading(true);
-        setError(null);
+        // Optimistic Update: Clear UI immediately
+        const idsToDelete = recordingsToDelete.map(r => r.id);
+        idsToDelete.forEach(id => deletedIdsRef.current.add(id));
+        setRecordings([]);
+        
+        // Stop polling immediately since list is empty
+        if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+        }
 
+        // Background Processing (Fire and Forget)
         const deletePromises = recordingsToDelete.map(recording => {
             const url = `${API_BASE_URL}api/audio/metadata/${recording.id}`;
             return axios.delete(url, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -217,61 +260,24 @@ const RecordingList = () => {
                 .catch(error => ({ id: recording.id, status: 'rejected', reason: error }));
         });
 
-        try {
-            const results = await Promise.allSettled(deletePromises);
-
+        // We do NOT await this to block the UI. We let it run in background.
+        Promise.allSettled(deletePromises).then(results => {
             let successfulDeletions = 0;
             let failedDeletions = 0;
 
             results.forEach(result => {
                 if (result.status === 'fulfilled' && (result.value.response.status === 200 || result.value.response.status === 204)) {
                     successfulDeletions++;
-                    console.log(`Successfully deleted recording ${result.value.id}`);
                 } else {
                     failedDeletions++;
                     const recordingId = result.status === 'fulfilled' ? result.value.id : (result.reason && result.reason.id);
-                    console.error(`Failed to delete recording ${recordingId || 'unknown'}:`, result.status === 'rejected' ? result.reason : result.value.response);
+                    console.error(`Failed to delete recording ${recordingId || 'unknown'} in background:`, result.status === 'rejected' ? result.reason : result.value.response);
                 }
             });
-
-            if (failedDeletions > 0) {
-                setError(`${successfulDeletions} recordings deleted. ${failedDeletions} deletions failed. Please check console for details and try again if necessary.`);
-            } else if (successfulDeletions > 0) {
-                setError(null);
-                console.log(`All ${successfulDeletions} targeted recordings deleted successfully.`);
-            }
-
-        } catch (err) {
-            console.error('Error processing batch deletion results:', err);
-            setError('An unexpected error occurred while processing deletions. Please refresh.');
-        } finally {
-            fetchRecordings().then(updatedData => {
-                if (updatedData && isMountedRef.current) {
-                    setRecordings(updatedData);
-                    const stillNeedsPolling = updatedData.some(rec => {
-                        const statusUpper = rec.status?.toUpperCase();
-                        const isTerminal = TERMINAL_STATUSES.includes(statusUpper);
-                        if (isTerminal) return false;
-                        const isUploading = UPLOADING_STATUSES.includes(statusUpper);
-                        if (isUploading) {
-                            const elapsedSeconds = rec.uploadTimestamp?.seconds
-                                ? (Date.now() / 1000) - rec.uploadTimestamp.seconds
-                                : 0;
-                            return elapsedSeconds <= UPLOAD_TIMEOUT_SECONDS;
-                        }
-                        return true;
-                    });
-                    if (stillNeedsPolling && !pollIntervalRef.current) {
-                        startPolling(updatedData);
-                    } else if (!stillNeedsPolling && pollIntervalRef.current) {
-                        clearInterval(pollIntervalRef.current);
-                        pollIntervalRef.current = null;
-                        console.log("Polling stopped after deletions as no items require it.");
-                    }
-                }
-                if (isMountedRef.current) setLoading(false);
-            });
-        }
+            console.log(`Background deletion complete. Success: ${successfulDeletions}, Failed: ${failedDeletions}`);
+        }).catch(err => {
+             console.error('Error in background batch deletion:', err);
+        });
     };
 
     const formatDate = (timestamp) => {
@@ -342,6 +348,7 @@ const RecordingList = () => {
                 case 'FAILED':
                 case 'PROCESSING_HALTED_NO_SPEECH':
                 case 'PROCESSING_HALTED_UNSUITABLE_CONTENT':
+                case 'SUMMARY_FAILED':
                     bgColor = 'bg-red-100';
                     textColor = 'text-red-800';
                     Icon = FiAlertTriangle;
@@ -373,30 +380,83 @@ const RecordingList = () => {
         );
     };
 
+    const groupRecordings = (recs) => {
+        const groups = {
+            'Today': [],
+            'This Week': [],
+            'This Month': [],
+            'Older': []
+        };
+
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const oneWeekAgo = new Date(todayStart);
+        oneWeekAgo.setDate(todayStart.getDate() - 7);
+        const oneMonthAgo = new Date(todayStart);
+        oneMonthAgo.setMonth(todayStart.getMonth() - 1);
+
+        recs.forEach(rec => {
+            if (!rec.uploadTimestamp?.seconds) {
+                groups['Older'].push(rec);
+                return;
+            }
+            const date = new Date(rec.uploadTimestamp.seconds * 1000);
+            
+            if (date >= todayStart) {
+                groups['Today'].push(rec);
+            } else if (date >= oneWeekAgo) {
+                groups['This Week'].push(rec);
+            } else if (date >= oneMonthAgo) {
+                groups['This Month'].push(rec);
+            } else {
+                groups['Older'].push(rec);
+            }
+        });
+
+        return groups;
+    };
+
+    const groupedRecordings = groupRecordings(filteredRecordings);
+
     return (
         <>
             <Header />
-            <main className="flex-grow py-12 bg-gray-50">
+            <main className="flex-grow py-12 bg-gray-50 dark:bg-gray-900">
                 <title>AudioScholar - My Recordings</title>
                 <div className="container mx-auto px-4">
-                    <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-3xl font-bold text-gray-800">My Recordings</h1>
-                        {!loading && recordings.length > 0 && (
-                            <button
-                                onClick={handleDeleteAllRecordings}
-                                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition flex items-center"
-                                title="Delete All Recordings"
-                            >
-                                <FiTrash2 className="mr-2 h-4 w-4" />
-                                Delete All
-                            </button>
-                        )}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                        <h1 className="text-3xl font-bold text-gray-800 dark:text-white">My Recordings</h1>
+                        <div className="flex items-center gap-4 w-full md:w-auto">
+                             <div className="relative w-full md:w-64">
+                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <FiSearch className="text-gray-400" />
+                                </span>
+                                <input
+                                    type="text"
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                                    placeholder="Search recordings..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+
+                            {!loading && recordings.length > 0 && (
+                                <button
+                                    onClick={handleDeleteAllRecordings}
+                                    className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition flex items-center whitespace-nowrap"
+                                    title="Delete All Recordings"
+                                >
+                                    <FiTrash2 className="mr-2 h-4 w-4" />
+                                    Delete All
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {loading && (
                         <div className="text-center py-10">
                             <FiLoader className="animate-spin h-8 w-8 mx-auto text-teal-600" />
-                            <p className="mt-2 text-gray-600">Loading recordings...</p>
+                            <p className="mt-2 text-gray-600 dark:text-gray-300">Loading recordings...</p>
                         </div>
                     )}
 
@@ -407,44 +467,59 @@ const RecordingList = () => {
                     )}
 
                     {!loading && recordings.length === 0 && !error && (
-                        <div className="text-center py-10 bg-white rounded-lg shadow p-6">
+                        <div className="text-center py-10 bg-white dark:bg-gray-800 rounded-lg shadow p-6">
                             <FiFile className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                            <p className="text-gray-600">You haven't uploaded any recordings yet.</p>
+                            <p className="text-gray-600 dark:text-gray-300">You haven't uploaded any recordings yet.</p>
                             <Link to="/upload" className="mt-4 inline-block bg-[#2D8A8A] hover:bg-[#236b6b] text-white font-medium py-2 px-5 rounded-md transition">
                                 Upload Your First Recording
                             </Link>
                         </div>
                     )}
 
-                    {!loading && recordings.length > 0 && (
-                        <div className="bg-white rounded-lg shadow overflow-hidden">
-                            <ul className="divide-y divide-gray-200">
-                                {recordings.map((recording) => (
-                                    <li key={recording.id} className="px-6 py-4 hover:bg-gray-50 transition duration-150 ease-in-out">
-                                        <div className="flex items-center justify-between flex-wrap gap-4">
-                                            <div className="flex-1 min-w-0">
-                                                <Link to={`/recordings/${recording.id}`} className="text-lg font-semibold text-teal-700 hover:text-teal-900 truncate block" title={recording.title}>
-                                                    {recording.title || 'Untitled Recording'}
-                                                </Link>
-                                                <p className="text-sm text-gray-500 mt-1">Uploaded: {formatDate(recording.uploadTimestamp)}</p>
-                                            </div>
-                                            <div className="flex items-center space-x-4 flex-shrink-0">
-                                                {getStatusBadge(recording)}
-                                                <Link to={`/recordings/${recording.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium inline-flex items-center" title="View Details">
-                                                    View Details <FiExternalLink className="ml-1 h-3 w-3" />
-                                                </Link>
-                                                <button
-                                                    onClick={() => handleDelete(recording.id)}
-                                                    className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-100 transition"
-                                                    title="Delete Recording"
-                                                >
-                                                    <FiTrash2 className="h-4 w-4" />
-                                                </button>
-                                            </div>
+                    {!loading && filteredRecordings.length === 0 && recordings.length > 0 && (
+                         <div className="text-center py-10">
+                            <p className="text-gray-600 dark:text-gray-300">No recordings found matching your search.</p>
+                        </div>
+                    )}
+
+                    {!loading && filteredRecordings.length > 0 && (
+                        <div className="space-y-8">
+                            {Object.entries(groupedRecordings).map(([group, groupRecordings]) => (
+                                groupRecordings.length > 0 && (
+                                    <div key={group}>
+                                        <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-4 ml-1">{group}</h2>
+                                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                                            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                                                {groupRecordings.map((recording) => (
+                                                    <li key={recording.id} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition duration-150 ease-in-out">
+                                                        <div className="flex items-center justify-between flex-wrap gap-4">
+                                                            <div className="flex-1 min-w-0">
+                                                                <Link to={`/recordings/${recording.id}`} className="text-lg font-semibold text-teal-700 hover:text-teal-900 dark:text-teal-400 dark:hover:text-teal-300 truncate block" title={recording.title}>
+                                                                    {recording.title || 'Untitled Recording'}
+                                                                </Link>
+                                                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Uploaded: {formatDate(recording.uploadTimestamp)}</p>
+                                                            </div>
+                                                            <div className="flex items-center space-x-4 flex-shrink-0">
+                                                                {getStatusBadge(recording)}
+                                                                <Link to={`/recordings/${recording.id}`} className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium inline-flex items-center" title="View Details">
+                                                                    View Details <FiExternalLink className="ml-1 h-3 w-3" />
+                                                                </Link>
+                                                                <button
+                                                                    onClick={() => handleDelete(recording.id)}
+                                                                    className="text-red-500 hover:text-red-700 p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 transition"
+                                                                    title="Delete Recording"
+                                                                >
+                                                                    <FiTrash2 className="h-4 w-4" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </div>
-                                    </li>
-                                ))}
-                            </ul>
+                                    </div>
+                                )
+                            ))}
                         </div>
                     )}
                 </div>

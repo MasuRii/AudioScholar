@@ -30,6 +30,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.core.ApiFuture;
+import com.google.api.gax.rpc.FailedPreconditionException;
 import com.google.cloud.Timestamp;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
@@ -124,7 +125,7 @@ public class FirebaseService {
 		}
 	}
 
-	private FirebaseAuth getFirebaseAuth() {
+	FirebaseAuth getFirebaseAuth() {
 		return this.firebaseAuth;
 	}
 
@@ -518,6 +519,18 @@ public class FirebaseService {
 				documents = future.get().getDocuments();
 			} catch (ExecutionException | InterruptedException e) {
 				Thread.currentThread().interrupt();
+
+				// Check for missing index error
+				Throwable cause = e.getCause();
+				if (cause instanceof FailedPreconditionException && cause.getMessage() != null
+						&& cause.getMessage().contains("requires an index")) {
+					log.error("Firestore missing index error: {}", cause.getMessage());
+					// The URL is usually in the message, identifying it in logs is crucial
+					throw new FirestoreInteractionException(
+							"Database query failed due to missing index. Administrator must create the index using the link in server logs.",
+							e);
+				}
+
 				log.error("Firestore query execution failed for user ID: {}", userId, e);
 				if (e.getCause() instanceof NullPointerException && e.getCause().getMessage() != null && e.getCause()
 						.getMessage().contains("Cannot read the array length because \"value\" is null")) {
@@ -919,6 +932,30 @@ public class FirebaseService {
 
 	@CacheEvict(value = CACHE_METADATA_BY_ID, key = "#metadataId", condition = "#metadataId != null")
 	@SuppressWarnings("null")
+	public String createCustomToken(String uid) throws FirebaseAuthException {
+		if (!StringUtils.hasText(uid)) {
+			log.warn("Attempted to create custom token with blank uid.");
+			throw new IllegalArgumentException("UID cannot be blank.");
+		}
+
+		try {
+			log.debug("Verifying user existence for UID: {}", uid);
+			getFirebaseAuth().getUser(uid);
+			log.info("User {} confirmed to exist. Proceeding with custom token creation.", uid);
+
+			String customToken = getFirebaseAuth().createCustomToken(uid);
+			log.info("Successfully created custom token for UID: {}", uid);
+			return customToken;
+		} catch (FirebaseAuthException e) {
+			if (e.getAuthErrorCode() == com.google.firebase.auth.AuthErrorCode.USER_NOT_FOUND) {
+				log.error("Attempted to create custom token for a non-existent user with UID: {}", uid);
+			} else {
+				log.error("Failed to create custom token for UID {}: {}", uid, e.getMessage());
+			}
+			throw e;
+		}
+	}
+
 	public void updateAudioMetadataStatusAndReason(String metadataId, @Nullable String userId, ProcessingStatus status,
 			String reason) throws ExecutionException, InterruptedException {
 		if (metadataId == null || status == null) {
@@ -926,7 +963,8 @@ public class FirebaseService {
 			throw new IllegalArgumentException("Metadata ID and Status cannot be null.");
 		}
 
-		DocumentReference docRef = getFirestore().collection(audioMetadataCollectionName).document(metadataId);
+		DocumentReference docRef = getFirestore().collection(Objects.requireNonNull(audioMetadataCollectionName))
+				.document(metadataId);
 		Map<String, Object> updates = new HashMap<>();
 		updates.put("status", status.name());
 		updates.put("lastUpdated", Timestamp.now());

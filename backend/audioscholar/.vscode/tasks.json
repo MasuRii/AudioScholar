@@ -4,7 +4,15 @@
         {
             "label": "spotless:apply (Pre-Launch Format)",
             "type": "shell",
-            "command": "${workspaceFolder}\\mvnw.cmd",
+            "windows": {
+                "command": ".\\mvnw.cmd"
+            },
+            "linux": {
+                "command": "./mvnw"
+            },
+            "osx": {
+                "command": "./mvnw"
+            },
             "args": ["spotless:apply"],
             "group": "build",
             "presentation": {

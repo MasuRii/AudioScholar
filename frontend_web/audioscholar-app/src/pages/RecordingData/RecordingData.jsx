@@ -1,6 +1,6 @@
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiHeadphones, FiLoader, FiUploadCloud } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiClock, FiDownload, FiEdit2, FiEye, FiHeadphones, FiLoader, FiSave, FiUploadCloud } from 'react-icons/fi';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
@@ -169,10 +169,40 @@ const RecordingData = () => {
 
   const [activeTab, setActiveTab] = useState('summary');
 
-  const fetchRecordingData = async () => {
+  // User Notes State
+  const [userNotes, setUserNotes] = useState('');
+  const [isEditingNotes, setIsEditingNotes] = useState(true);
+
+  // Load Notes from LocalStorage
+  useEffect(() => {
+    if (id) {
+      const savedNotes = localStorage.getItem(`user_notes_${id}`);
+      if (savedNotes) {
+        setUserNotes(savedNotes);
+        setIsEditingNotes(false); // Start in preview mode if notes exist
+      }
+    }
+  }, [id]);
+
+  // Save Notes to LocalStorage
+  const handleSaveNotes = () => {
+    if (id) {
+      localStorage.setItem(`user_notes_${id}`, userNotes);
+      setIsEditingNotes(false);
+    }
+  };
+
+  const fetchRecordingData = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const cachedData = localStorage.getItem(`recording_metadata_${id}`);
+      if (cachedData) {
+        setRecordingData(JSON.parse(cachedData));
+        setLoading(false);
+        return;
+      }
+
       const token = localStorage.getItem('AuthToken');
       if (!token) {
         setError("User not authenticated. Please log in.");
@@ -189,6 +219,7 @@ const RecordingData = () => {
       const foundRecording = allRecordings.find(rec => rec.id === id);
 
       if (foundRecording) {
+        localStorage.setItem(`recording_metadata_${id}`, JSON.stringify(foundRecording));
         setRecordingData(foundRecording);
         console.log("Found recording metadata:", foundRecording);
       } else {
@@ -213,9 +244,9 @@ const RecordingData = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
 
-  const fetchDetails = async (actualRecordingId) => {
+  const fetchDetails = React.useCallback(async (actualRecordingId) => {
     if (!actualRecordingId) {
       console.warn("Cannot fetch details, recordingId is missing from metadata.");
       setSummaryError("Cannot fetch summary: Internal data missing.");
@@ -238,97 +269,117 @@ const RecordingData = () => {
     }
     const headers = { 'Authorization': `Bearer ${token}` };
 
-    const summaryUrl = `${API_BASE_URL}api/recordings/${actualRecordingId}/summary`;
-    let summaryStatus = null;
-    try {
-      console.log(`Fetching summary from: ${summaryUrl}`);
-      const summaryResponse = await axios.get(summaryUrl, { headers });
-      summaryStatus = summaryResponse.status;
+    const summaryCacheKey = `recording_summary_${actualRecordingId}`;
+    const recommendationsCacheKey = `recording_recommendations_${actualRecordingId}`;
 
-      if (summaryResponse.status === 200) {
-        setSummaryData(summaryResponse.data);
-        console.log("Fetched summary (200 OK):", summaryResponse.data);
-      } else if (summaryResponse.status === 202) {
-        const message = summaryResponse.data?.message || "Processing is ongoing.";
-        console.log(`Summary status 202 Accepted: ${message}`);
-        setSummaryError(message);
-        setSummaryData(null);
-      } else {
-        console.warn(`Unexpected success status for summary: ${summaryResponse.status}`);
-        setSummaryError(`Unexpected status: ${summaryResponse.status}`);
-        setSummaryData(null);
-      }
-    } catch (err) {
-      console.error('Error fetching summary:', err);
-      summaryStatus = err.response?.status;
-      if (err.response) {
-        const errorData = err.response.data;
-        const message = errorData?.message || `Failed to fetch summary (Status: ${err.response.status})`;
-        if (err.response.status === 404) {
-          setSummaryError('Summary not found or recording processing failed/halted.');
-        } else if (err.response.status === 403) {
-          setSummaryError('Access denied to summary.');
-        } else if (err.response.status === 401) {
-          setError("Session expired or not authorized. Please log in again.");
-          localStorage.removeItem('AuthToken');
-          navigate('/signin');
-        } else if (err.response.status === 500 && errorData?.status?.startsWith('PROCESSING_HALTED')) {
-          setSummaryError(`Processing halted: ${errorData.message || 'Content unsuitable or no speech detected.'}`);
-        } else if (err.response.status === 500 && errorData?.status === 'FAILED') {
-          setSummaryError(`Processing failed: ${errorData.message || 'An error occurred during processing.'}`);
-        }
-        else {
-          setSummaryError(message);
-        }
-      } else if (err.request) {
-        setSummaryError("Network error fetching summary.");
-      } else {
-        setSummaryError("An unexpected error occurred fetching summary.");
-      }
-      setSummaryData(null);
-    } finally {
+    const cachedSummary = localStorage.getItem(summaryCacheKey);
+    const cachedRecommendations = localStorage.getItem(recommendationsCacheKey);
+
+    let summaryStatus = null;
+
+    if (cachedSummary) {
+      setSummaryData(JSON.parse(cachedSummary));
       setSummaryLoading(false);
+      summaryStatus = 200;
+    } else {
+      const summaryUrl = `${API_BASE_URL}api/recordings/${actualRecordingId}/summary`;
+      try {
+        console.log(`Fetching summary from: ${summaryUrl}`);
+        const summaryResponse = await axios.get(summaryUrl, { headers });
+        summaryStatus = summaryResponse.status;
+
+        if (summaryResponse.status === 200) {
+          localStorage.setItem(summaryCacheKey, JSON.stringify(summaryResponse.data));
+          setSummaryData(summaryResponse.data);
+          console.log("Fetched summary (200 OK):", summaryResponse.data);
+        } else if (summaryResponse.status === 202) {
+          const message = summaryResponse.data?.message || "Processing is ongoing.";
+          console.log(`Summary status 202 Accepted: ${message}`);
+          setSummaryError(message);
+          setSummaryData(null);
+        } else {
+          console.warn(`Unexpected success status for summary: ${summaryResponse.status}`);
+          setSummaryError(`Unexpected status: ${summaryResponse.status}`);
+          setSummaryData(null);
+        }
+      } catch (err) {
+        console.error('Error fetching summary:', err);
+        summaryStatus = err.response?.status;
+        if (err.response) {
+          const errorData = err.response.data;
+          const message = errorData?.message || `Failed to fetch summary (Status: ${err.response.status})`;
+          if (err.response.status === 404) {
+            setSummaryError('Summary not found or recording processing failed/halted.');
+          } else if (err.response.status === 403) {
+            setSummaryError('Access denied to summary.');
+          } else if (err.response.status === 401) {
+            setError("Session expired or not authorized. Please log in again.");
+            localStorage.removeItem('AuthToken');
+            navigate('/signin');
+          } else if (err.response.status === 500 && errorData?.status?.startsWith('PROCESSING_HALTED')) {
+            setSummaryError(`Processing halted: ${errorData.message || 'Content unsuitable or no speech detected.'}`);
+          } else if (err.response.status === 500 && errorData?.status === 'FAILED') {
+            setSummaryError(`Processing failed: ${errorData.message || 'An error occurred during processing.'}`);
+          }
+          else {
+            setSummaryError(message);
+          }
+        } else if (err.request) {
+          setSummaryError("Network error fetching summary.");
+        } else {
+          setSummaryError("An unexpected error occurred fetching summary.");
+        }
+        setSummaryData(null);
+      } finally {
+        setSummaryLoading(false);
+      }
     }
 
     const shouldFetchRecommendations = summaryStatus === 200 || summaryStatus === 202;
 
     if (shouldFetchRecommendations) {
-      const recommendationsUrl = `${API_BASE_URL}api/v1/recommendations/recording/${actualRecordingId}`;
-      try {
-        console.log(`Fetching recommendations from: ${recommendationsUrl}`);
-        const recommendationsResponse = await axios.get(recommendationsUrl, { headers });
-
-        if (recommendationsResponse.status === 200) {
-          setRecommendationsData(recommendationsResponse.data || []);
-          console.log("Fetched recommendations (200 OK):", recommendationsResponse.data);
-        } else {
-          console.warn(`Unexpected success status for recommendations: ${recommendationsResponse.status}`);
-          setRecommendationsError(`Unexpected status: ${recommendationsResponse.status}`);
-          setRecommendationsData([]);
-        }
-      } catch (err) {
-        console.error('Error fetching recommendations:', err);
-        if (err.response) {
-          const message = err.response.data?.message || `Failed to fetch recommendations (Status: ${err.response.status})`;
-          if (err.response.status === 404) {
-            setRecommendationsError('No recommendations found for this recording.');
-          } else if (err.response.status === 403) {
-            setRecommendationsError('Access denied to recommendations.');
-          } else if (err.response.status === 401) {
-            setError("Session expired or not authorized. Please log in again.");
-            localStorage.removeItem('AuthToken');
-            navigate('/signin');
-          } else {
-            setRecommendationsError(message);
-          }
-        } else if (err.request) {
-          setRecommendationsError("Network error fetching recommendations.");
-        } else {
-          setRecommendationsError("An unexpected error occurred fetching recommendations.");
-        }
-        setRecommendationsData([]);
-      } finally {
+      if (cachedRecommendations) {
+        setRecommendationsData(JSON.parse(cachedRecommendations));
         setRecommendationsLoading(false);
+      } else {
+        const recommendationsUrl = `${API_BASE_URL}api/v1/recommendations/recording/${actualRecordingId}`;
+        try {
+          console.log(`Fetching recommendations from: ${recommendationsUrl}`);
+          const recommendationsResponse = await axios.get(recommendationsUrl, { headers });
+
+          if (recommendationsResponse.status === 200) {
+            localStorage.setItem(recommendationsCacheKey, JSON.stringify(recommendationsResponse.data));
+            setRecommendationsData(recommendationsResponse.data || []);
+            console.log("Fetched recommendations (200 OK):", recommendationsResponse.data);
+          } else {
+            console.warn(`Unexpected success status for recommendations: ${recommendationsResponse.status}`);
+            setRecommendationsError(`Unexpected status: ${recommendationsResponse.status}`);
+            setRecommendationsData([]);
+          }
+        } catch (err) {
+          console.error('Error fetching recommendations:', err);
+          if (err.response) {
+            const message = err.response.data?.message || `Failed to fetch recommendations (Status: ${err.response.status})`;
+            if (err.response.status === 404) {
+              setRecommendationsError('No recommendations found for this recording.');
+            } else if (err.response.status === 403) {
+              setRecommendationsError('Access denied to recommendations.');
+            } else if (err.response.status === 401) {
+              setError("Session expired or not authorized. Please log in again.");
+              localStorage.removeItem('AuthToken');
+              navigate('/signin');
+            } else {
+              setRecommendationsError(message);
+            }
+          } else if (err.request) {
+            setRecommendationsError("Network error fetching recommendations.");
+          } else {
+            setRecommendationsError("An unexpected error occurred fetching recommendations.");
+          }
+          setRecommendationsData([]);
+        } finally {
+          setRecommendationsLoading(false);
+        }
       }
     } else {
       console.log("Skipping recommendations fetch because summary was not successful or processing.");
@@ -336,7 +387,7 @@ const RecordingData = () => {
       setRecommendationsLoading(false);
       setRecommendationsData([]);
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     if (id) {
@@ -347,7 +398,7 @@ const RecordingData = () => {
       setError("Recording ID is missing.");
       setLoading(false);
     }
-  }, [id]);
+  }, [id, fetchRecordingData]);
 
   useEffect(() => {
     if (recordingData?.recordingId) {
@@ -358,7 +409,7 @@ const RecordingData = () => {
       setSummaryError("Cannot fetch details: Critical recording identifier is missing.");
       setRecommendationsError("Cannot fetch details: Critical recording identifier is missing.");
     }
-  }, [recordingData]);
+  }, [recordingData, fetchDetails]);
 
   const formatDate = (timestamp) => {
     if (timestamp?.seconds) {
@@ -493,6 +544,15 @@ const RecordingData = () => {
               </div>
 
               <div className="flex space-x-3 mt-4 md:mt-0 flex-shrink-0">
+                {audioSrcToPlay && (
+                  <a
+                    href={audioSrcToPlay}
+                    download
+                    className="inline-flex items-center bg-white text-teal-700 font-medium py-2 px-4 rounded-md text-sm transition-all duration-200 ease-in-out shadow hover:shadow-md hover:bg-gray-50 transform hover:-translate-y-0.5"
+                  >
+                    <FiDownload className="mr-2 h-4 w-4" /> Download Audio
+                  </a>
+                )}
                 <button
                   onClick={handleCopySummaryAndVocab}
                   disabled={!summaryData}
@@ -523,17 +583,6 @@ const RecordingData = () => {
                   >
                     Your browser does not support the audio element.
                   </audio>
-
-                  <div className="mt-4 flex justify-center">
-                    <div className="bg-white p-2 rounded-md shadow-sm flex items-center justify-center">
-                      <a href={audioSrcToPlay} download className="text-sm text-gray-700 flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        Download Audio
-                      </a>
-                    </div>
-                  </div>
                 </div>
 
                 {!recordingData.transcriptText && recordingData.status !== 'failed' && recordingData.status !== 'processing_halted_unsuitable_content' && (
@@ -640,6 +689,15 @@ const RecordingData = () => {
                 Summary
               </button>
               <button
+                onClick={() => setActiveTab('notes')}
+                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out ${activeTab === 'notes'
+                  ? 'border-teal-500 text-teal-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-400'
+                  }`}
+              >
+                My Notes
+              </button>
+              <button
                 onClick={() => setActiveTab('transcript')}
                 className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors duration-150 ease-in-out ${activeTab === 'transcript'
                   ? 'border-teal-500 text-teal-600'
@@ -723,6 +781,47 @@ const RecordingData = () => {
                 {!summaryLoading && !summaryError && !summaryData && (
                   <p className="text-gray-500 text-center py-10">No summary data could be generated or retrieved for this recording.</p>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'notes' && (
+              <div className="h-full flex flex-col">
+                 <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-semibold text-gray-800">My Notes</h2>
+                    <div className="flex space-x-2">
+                         <button 
+                            onClick={() => setIsEditingNotes(!isEditingNotes)}
+                            className="flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition"
+                         >
+                             {isEditingNotes ? <><FiEye className="mr-1.5"/> Preview</> : <><FiEdit2 className="mr-1.5"/> Edit</>}
+                         </button>
+                         {isEditingNotes && (
+                             <button 
+                                onClick={handleSaveNotes}
+                                className="flex items-center px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-sm font-medium transition"
+                             >
+                                 <FiSave className="mr-1.5"/> Save
+                             </button>
+                         )}
+                    </div>
+                 </div>
+                 
+                 {isEditingNotes ? (
+                     <textarea
+                        value={userNotes}
+                        onChange={(e) => setUserNotes(e.target.value)}
+                        placeholder="Start typing your notes here (Markdown supported)..."
+                        className="w-full h-[500px] p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent resize-none font-mono text-sm"
+                     />
+                 ) : (
+                     <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed min-h-[300px]">
+                         {userNotes ? (
+                             <ReactMarkdown>{userNotes}</ReactMarkdown>
+                         ) : (
+                             <p className="text-gray-400 italic">No notes yet. Click Edit to start writing.</p>
+                         )}
+                     </div>
+                 )}
               </div>
             )}
 

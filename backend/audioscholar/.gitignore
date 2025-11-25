@@ -35,5 +35,6 @@ build/
 
 # .gitignore
 .env
+.kiloignore
 
 src/main/resources/uploads/

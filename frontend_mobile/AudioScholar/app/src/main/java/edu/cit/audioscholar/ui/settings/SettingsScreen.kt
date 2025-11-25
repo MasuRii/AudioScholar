@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,11 +25,13 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,17 +40,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavHostController
 import edu.cit.audioscholar.BuildConfig
 import edu.cit.audioscholar.R
 import edu.cit.audioscholar.domain.model.QualitySetting
+import edu.cit.audioscholar.ui.auth.LegalContent
 import edu.cit.audioscholar.ui.main.Screen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -57,7 +60,6 @@ import edu.cit.audioscholar.ui.settings.SyncFrequency
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    navController: NavHostController,
     drawerState: DrawerState,
     scope: CoroutineScope,
     viewModel: SettingsViewModel = hiltViewModel()
@@ -67,7 +69,11 @@ fun SettingsScreen(
     val showQualityDialog = remember { mutableStateOf(false) }
     val showSyncModeDialog = remember { mutableStateOf(false) }
     val showSyncFrequencyDialog = remember { mutableStateOf(false) }
-    val uriHandler = LocalUriHandler.current
+
+    val sheetState = rememberModalBottomSheetState()
+    val showLegalSheet = remember { mutableStateOf(false) }
+    val legalSheetTitle = remember { mutableStateOf("") }
+    val legalSheetContent = remember { mutableStateOf("") }
 
     val selectedTheme by viewModel.selectedTheme.collectAsState()
     val selectedQuality by viewModel.selectedQuality.collectAsState()
@@ -116,6 +122,50 @@ fun SettingsScreen(
             onDismissRequest = { showSyncFrequencyDialog.value = false },
             optionLabel = { frequency -> stringResource(id = frequency.labelResId) }
         )
+    }
+
+    if (showLegalSheet.value) {
+        ModalBottomSheet(
+            onDismissRequest = { showLegalSheet.value = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f)
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = legalSheetTitle.value,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    textAlign = TextAlign.Center
+                )
+                HorizontalDivider()
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 16.dp)
+                ) {
+                    Text(
+                        text = legalSheetContent.value,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showLegalSheet.value = false }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                ) {
+                    Text(stringResource(R.string.onboarding_back).replace("Back", "Close")) // Reusing string or just "Close"
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -172,15 +222,27 @@ fun SettingsScreen(
             SettingsSectionHeader(title = stringResource(R.string.settings_section_support))
             SettingsItemRow(
                 title = stringResource(R.string.settings_item_help_center),
-                onClick = { uriHandler.openUri(context.getString(R.string.settings_url_help_center)) }
+                onClick = {
+                    legalSheetTitle.value = context.getString(R.string.settings_item_help_center)
+                    legalSheetContent.value = LegalContent.HELP_CENTER
+                    showLegalSheet.value = true
+                }
             )
             SettingsItemRow(
                 title = stringResource(R.string.settings_item_privacy_policy),
-                onClick = { uriHandler.openUri(context.getString(R.string.settings_url_privacy_policy)) }
+                onClick = {
+                    legalSheetTitle.value = context.getString(R.string.settings_item_privacy_policy)
+                    legalSheetContent.value = LegalContent.PRIVACY_POLICY
+                    showLegalSheet.value = true
+                }
             )
             SettingsItemRow(
                 title = stringResource(R.string.settings_item_terms_service),
-                onClick = { uriHandler.openUri(context.getString(R.string.settings_url_terms_service)) }
+                onClick = {
+                    legalSheetTitle.value = context.getString(R.string.settings_item_terms_service)
+                    legalSheetContent.value = LegalContent.TERMS_OF_SERVICE
+                    showLegalSheet.value = true
+                }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp))

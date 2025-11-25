@@ -19,8 +19,11 @@ public enum ProcessingStatus {
 	SUMMARIZATION_QUEUED, // Message sent to final summarization queue
 	SUMMARIZING, // Combined summarization in progress
 	SUMMARY_COMPLETE, // Summary has been generated and saved
+	SUMMARY_FAILED, // Summarization failed after all retry attempts
 	RECOMMENDATIONS_QUEUED, // Message sent to recommendations queue
 	GENERATING_RECOMMENDATIONS, // Generating learning recommendations
 	COMPLETE, // Process finished successfully, all steps done
+	COMPLETED_WITH_WARNINGS, // Process finished, but with non-critical failures (e.g. recommendations
+								// skipped)
 	FAILED // An error occurred at some stage
 }

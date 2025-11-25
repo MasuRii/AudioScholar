@@ -70,7 +70,7 @@ const CheckoutPage = () => {
                 if (response.status === 200 || response.status === 204) {
                     console.log('Successfully updated user role to ROLE_PREMIUM');
                     localStorage.setItem('userSubscriptionTier', tier);
-                    alert('Subscription successful! You are now a Premium member.');
+                    alert('Thank you for your purchase! Your Premium membership is now active.');
                 } else {
                     console.error('Role update API call was not successful, status:', response.status);
                     localStorage.setItem('userSubscriptionTier', tier);

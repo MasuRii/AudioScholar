@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -54,11 +55,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import edu.cit.audioscholar.R
+import edu.cit.audioscholar.domain.model.PasswordStrength
 import kotlinx.coroutines.launch
-
-enum class PasswordStrength {
-    NONE, WEAK, MEDIUM, STRONG
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,12 +69,13 @@ fun ChangePasswordScreen(
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(uiState.changeSuccess) {
         if (uiState.changeSuccess) {
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    message = "Password changed successfully!",
+                    message = context.getString(R.string.settings_password_change_success),
                     duration = SnackbarDuration.Short
                 )
                 navController.navigateUp()
@@ -89,7 +88,7 @@ fun ChangePasswordScreen(
         uiState.generalMessage?.let { message ->
             scope.launch {
                 snackbarHostState.showSnackbar(
-                    message = message,
+                    message = message.asString(context),
                     duration = SnackbarDuration.Short
                 )
                 viewModel.consumeGeneralMessage()
@@ -161,7 +160,7 @@ fun ChangePasswordScreen(
                     }
                 },
                 isError = uiState.currentPasswordError != null,
-                supportingText = { uiState.currentPasswordError?.let { Text(it) } },
+                supportingText = { uiState.currentPasswordError?.let { Text(it.asString(context)) } },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading
             )
@@ -217,7 +216,7 @@ fun ChangePasswordScreen(
                     if (uiState.newPasswordErrors.isNotEmpty()) {
                         uiState.newPasswordErrors.forEach { error ->
                             Text(
-                                text = "• $error",
+                                text = "• ${error.asString(context)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -251,7 +250,7 @@ fun ChangePasswordScreen(
                     }
                 },
                 isError = uiState.confirmPasswordError != null,
-                supportingText = { uiState.confirmPasswordError?.let { Text(it) } },
+                supportingText = { uiState.confirmPasswordError?.let { Text(it.asString(context)) } },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading
             )

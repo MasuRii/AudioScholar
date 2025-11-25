@@ -10,6 +10,7 @@
 /* Custom styles */
 body {
     font-family: 'Inter', sans-serif; /* Example: Using Inter font */
+    @apply bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300;
 }
 
 /* Add custom animations here */

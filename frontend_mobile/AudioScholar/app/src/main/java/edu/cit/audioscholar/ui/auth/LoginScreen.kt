@@ -6,15 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,29 +17,9 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LocalContentColor
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -88,8 +60,9 @@ fun LoginScreen(
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
 
     val googleSignInClient = remember {
+        val clientId = context.getString(R.string.default_web_client_id)
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestIdToken(clientId)
             .requestEmail()
             .build()
         GoogleSignIn.getClient(context, gso)
@@ -124,11 +97,25 @@ fun LoginScreen(
         }
     }
 
+    LaunchedEffect(loginState.navigateToForgotPassword) {
+        if (loginState.navigateToForgotPassword) {
+            navController.navigate(Screen.ForgotPassword.route)
+            viewModel.onForgotPasswordNavigationHandled()
+        }
+    }
+
+    LaunchedEffect(loginState.navigateToEmailVerification) {
+        if (loginState.navigateToEmailVerification) {
+            navController.navigate(Screen.EmailVerification.route)
+            viewModel.onEmailVerificationNavigationHandled()
+        }
+    }
+
     LaunchedEffect(key1 = viewModel) {
         viewModel.loginScreenEventFlow.collectLatest { event ->
             when (event) {
                 is LoginScreenEvent.ShowInfoMessage -> {
-                    scope.launch { snackbarHostState.showSnackbar(event.message, duration = SnackbarDuration.Short) }
+                    scope.launch { snackbarHostState.showSnackbar(event.message.asString(context), duration = SnackbarDuration.Short) }
                 }
                 is LoginScreenEvent.LaunchGoogleSignIn -> {
                     Log.d("LoginScreen", "Launching Google Sign-In Intent...")
@@ -143,7 +130,7 @@ fun LoginScreen(
                         Log.e("LoginScreen", "Could not launch Custom Tab for GitHub: ${e.message}")
                         scope.launch {
                             snackbarHostState.showSnackbar(
-                                message = "Could not open browser for GitHub login.",
+                                message = context.getString(R.string.login_error_github_browser),
                                 duration = SnackbarDuration.Short
                             )
                         }
@@ -157,7 +144,7 @@ fun LoginScreen(
     LaunchedEffect(loginState.errorMessage) {
         loginState.errorMessage?.let { message ->
             scope.launch {
-                snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+                snackbarHostState.showSnackbar(message.asString(context), duration = SnackbarDuration.Short)
                 viewModel.consumeErrorMessage()
             }
         }
@@ -313,7 +300,7 @@ fun LoginScreen(
                             tint = Color.Unspecified
                         )
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text("Google")
+                        Text(stringResource(R.string.login_provider_google))
                     }
                 }
 
@@ -336,7 +323,7 @@ fun LoginScreen(
                             tint = LocalContentColor.current
                         )
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text("GitHub")
+                        Text(stringResource(R.string.login_provider_github))
                     }
                 }
             }

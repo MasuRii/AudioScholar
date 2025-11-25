@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="edu.cit.audioscholar">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -49,6 +48,14 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="audioscholar" android:host="github-callback" />
+            </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="audioscholar-39b22.web.app" />
+                <data android:scheme="https" android:host="audioscholar-39b22.firebaseapp.com" />
             </intent-filter>
 
         </activity>

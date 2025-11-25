@@ -102,4 +102,9 @@ class MainViewModel @Inject constructor(
             authRepository.clearLocalUserCache()
         }
     }
+
+    fun saveAuthToken(token: String) {
+        authRepository.saveAuthToken(token)
+        prefs.edit().putBoolean(SplashActivity.KEY_IS_LOGGED_IN, true).apply()
+    }
 }
