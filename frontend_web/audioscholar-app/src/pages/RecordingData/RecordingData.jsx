@@ -1,16 +1,38 @@
 import axios from 'axios';
-import React, { useEffect, useState } from 'react';
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiDownload, FiEdit2, FiEye, FiHeadphones, FiLoader, FiSave, FiUploadCloud } from 'react-icons/fi';
-import ReactMarkdown from 'react-markdown';
-import { useNavigate, useParams } from 'react-router-dom';
-import { API_BASE_URL } from '../../services/authService';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { FiExternalLink, FiCopy, FiCheck, FiEdit, FiSave, FiX, FiLoader, FiAlertTriangle, FiCheckCircle, FiUploadCloud, FiClock } from 'react-icons/fi';
+import { toast } from 'react-toastify';
+import { API_BASE_URL } from '../../config';
 import { Header } from '../Home/HomePage';
 
 const DownloadIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>;
 
 const UPLOADING_STATUSES = ['UPLOADING_TO_STORAGE', 'UPLOAD_IN_PROGRESS', 'UPLOAD_PENDING'];
 const UPLOAD_TIMEOUT_SECONDS = 10 * 60;
-const TERMINAL_STATUSES = ['COMPLETED', 'COMPLETE', 'FAILED', 'PROCESSING_HALTED_UNSUITABLE_CONTENT', 'PROCESSING_HALTED_NO_SPEECH'];
+const TERMINAL_STATUSES = [
+  'COMPLETED', 
+  'COMPLETE', 
+  'FAILED', 
+  'PROCESSING_HALTED_UNSUITABLE_CONTENT', 
+  'PROCESSING_HALTED_NO_SPEECH',
+  'SUMMARY_FAILED',
+  'COMPLETED_WITH_WARNINGS'
+];
+const PROCESSING_STATUSES = [
+  'PROCESSING_QUEUED',
+  'TRANSCRIBING',
+  'PDF_CONVERTING',
+  'PDF_CONVERTING_API',
+  'TRANSCRIPTION_COMPLETE',
+  'PDF_CONVERSION_COMPLETE',
+  'SUMMARIZATION_QUEUED',
+  'SUMMARIZING',
+  'SUMMARY_COMPLETE',
+  'RECOMMENDATIONS_QUEUED',
+  'GENERATING_RECOMMENDATIONS',
+  'PROCESSING'
+];
 
 const formatDuration = (seconds) => {
   if (seconds === null || typeof seconds !== 'number' || seconds < 0) return 'N/A';
@@ -31,86 +53,131 @@ const StatusBadge = ({ recording }) => {
   let titleText = '';
 
   const isUploadingOrPending = UPLOADING_STATUSES.includes(statusUpper);
+  const isProcessing = PROCESSING_STATUSES.includes(statusUpper);
   const elapsedSeconds = uploadTimestamp?.seconds
     ? (Date.now() / 1000) - uploadTimestamp.seconds
     : 0;
   const isTimedOutUploadDisplay = isUploadingOrPending && elapsedSeconds > UPLOAD_TIMEOUT_SECONDS;
 
-  if (isTimedOutUploadDisplay) {
-    bgColor = 'bg-gray-100';
-    textColor = 'text-gray-700';
-    Icon = FiClock;
-    displayStatus = 'Processing Upload';
-    isSpinning = false;
-    titleText = `Upload received ${Math.round(elapsedSeconds / 60)} mins ago, processing initiated. Status: ${originalStatus}`;
-  } else {
-    switch (statusUpper) {
-      case 'COMPLETE':
-      case 'COMPLETED':
-        bgColor = 'bg-green-100';
-        textColor = 'text-green-800';
-        Icon = FiCheckCircle;
-        displayStatus = 'Completed';
-        break;
-      case 'UPLOAD_PENDING':
-      case 'UPLOAD_IN_PROGRESS':
-      case 'UPLOADING_TO_STORAGE':
-      case 'UPLOADED':
-        bgColor = 'bg-blue-100';
-        textColor = 'text-blue-800';
-        Icon = FiUploadCloud;
-        displayStatus = 'Uploading';
-        isSpinning = true;
-        break;
-      case 'PROCESSING_QUEUED':
-      case 'TRANSCRIBING':
-      case 'PDF_CONVERTING':
-      case 'PDF_CONVERTING_API':
-      case 'TRANSCRIPTION_COMPLETE':
-      case 'PDF_CONVERSION_COMPLETE':
-      case 'SUMMARIZATION_QUEUED':
-      case 'SUMMARIZING':
-      case 'SUMMARY_COMPLETE':
-      case 'RECOMMENDATIONS_QUEUED':
-      case 'GENERATING_RECOMMENDATIONS':
-      case 'PROCESSING':
-        bgColor = 'bg-yellow-100';
-        textColor = 'text-yellow-800';
-        Icon = FiLoader;
-        displayStatus = 'Processing';
-        isSpinning = true;
-        break;
-      case 'FAILED':
-      case 'PROCESSING_HALTED_NO_SPEECH':
-      case 'PROCESSING_HALTED_UNSUITABLE_CONTENT':
-        bgColor = 'bg-red-100';
-        textColor = 'text-red-800';
-        Icon = FiAlertTriangle;
-        displayStatus = 'Failed';
-        break;
-      default:
-        displayStatus = 'Unknown';
-        if (statusUpper !== 'UNKNOWN') {
-          console.warn('[Badge] Unknown recording status received:', originalStatus);
-        }
-        break;
+  const getStatusInfo = () => {
+    const statusInfo = {
+      bgColor: 'bg-gray-100',
+      textColor: 'text-gray-800',
+      Icon: FiClock,
+      displayStatus: 'Unknown',
+      isSpinning: false,
+      progress: null
+    };
+
+    if (TERMINAL_STATUSES.includes(statusUpper)) {
+      statusInfo.bgColor = 'bg-green-100';
+      statusInfo.textColor = 'text-green-800';
+      statusInfo.Icon = FiCheckCircle;
+      statusInfo.displayStatus = 'Completed';
+      
+      if (statusUpper === 'FAILED' || statusUpper === 'PROCESSING_HALTED_NO_SPEECH' || 
+          statusUpper === 'PROCESSING_HALTED_UNSUITABLE_CONTENT' || statusUpper === 'SUMMARY_FAILED') {
+        statusInfo.bgColor = 'bg-red-100';
+        statusInfo.textColor = 'text-red-800';
+        statusInfo.Icon = FiAlertTriangle;
+        statusInfo.displayStatus = 'Failed';
+      } else if (statusUpper === 'COMPLETED_WITH_WARNINGS') {
+        statusInfo.bgColor = 'bg-yellow-100';
+        statusInfo.textColor = 'text-yellow-800';
+        statusInfo.Icon = FiAlertTriangle;
+        statusInfo.displayStatus = 'Completed with Warnings';
+      }
+      return statusInfo;
     }
-    titleText = (displayStatus === 'Failed' && failureReason)
-      ? `${displayStatus}: ${failureReason}`
-      : displayStatus;
-    if (displayStatus !== originalStatus && originalStatus) {
-      titleText += ` (Backend: ${originalStatus})`;
+
+    if (isProcessing) {
+      statusInfo.bgColor = 'bg-blue-100';
+      statusInfo.textColor = 'text-blue-800';
+      statusInfo.Icon = FiLoader;
+      statusInfo.isSpinning = true;
+      
+      const statusMap = {
+        'PROCESSING_QUEUED': 'Queued for Processing',
+        'TRANSCRIBING': 'Transcribing Audio',
+        'PDF_CONVERTING': 'Converting Document',
+        'PDF_CONVERTING_API': 'Converting Document',
+        'TRANSCRIPTION_COMPLETE': 'Processing Transcript',
+        'PDF_CONVERSION_COMPLETE': 'Processing Document',
+        'SUMMARIZATION_QUEUED': 'Queued for Summarization',
+        'SUMMARIZING': 'Generating Summary',
+        'SUMMARY_COMPLETE': 'Generating Recommendations',
+        'RECOMMENDATIONS_QUEUED': 'Queued for Recommendations',
+        'GENERATING_RECOMMENDATIONS': 'Generating Recommendations',
+        'PROCESSING': 'Processing',
+        'UPLOADED': 'Starting Processing'
+      };
+      
+      statusInfo.displayStatus = statusMap[statusUpper] || 'Processing';
+      
+      if (statusUpper === 'TRANSCRIBING') {
+        statusInfo.progress = 'This may take a few minutes...';
+      } else if (statusUpper === 'SUMMARIZING') {
+        statusInfo.progress = 'Generating AI summary...';
+      } else if (statusUpper === 'GENERATING_RECOMMENDATIONS') {
+        statusInfo.progress = 'Finding relevant learning resources...';
+      }
+      
+      return statusInfo;
     }
+
+    if (isUploadingOrPending) {
+      statusInfo.bgColor = 'bg-blue-100';
+      statusInfo.textColor = 'text-blue-800';
+      statusInfo.Icon = FiUploadCloud;
+      statusInfo.isSpinning = true;
+      statusInfo.displayStatus = 'Uploading';
+      
+      if (statusUpper === 'UPLOADED') {
+        statusInfo.displayStatus = 'Upload Complete';
+        statusInfo.progress = 'Starting processing...';
+      }
+      
+      return statusInfo;
+    }
+
+    return statusInfo;
+  };
+
+  const statusInfo = getStatusInfo();
+  
+  bgColor = statusInfo.bgColor;
+  textColor = statusInfo.textColor;
+  Icon = statusInfo.Icon;
+  displayStatus = statusInfo.displayStatus;
+  isSpinning = statusInfo.isSpinning;
+  
+  const statusContext = [];
+  if (statusInfo.progress) {
+    statusContext.push(statusInfo.progress);
   }
+  if (failureReason && (statusUpper === 'FAILED' || statusUpper === 'SUMMARY_FAILED' || 
+      statusUpper === 'PROCESSING_HALTED_NO_SPEECH' || statusUpper === 'PROCESSING_HALTED_UNSUITABLE_CONTENT')) {
+    statusContext.push(`Reason: ${failureReason}`);
+  }
+  if (displayStatus !== originalStatus && originalStatus) {
+    statusContext.push(`(Status: ${originalStatus})`);
+  }
+  
+  titleText = statusContext.join(' - ');
 
   return (
-    <span
-      title={titleText}
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgColor} ${textColor}`}
-    >
-      <Icon className={`mr-1 h-3 w-3 ${isSpinning ? 'animate-spin' : ''}`} />
-      {displayStatus}
-    </span>
+    <div className="flex flex-col">
+      <span
+        title={titleText}
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${bgColor} ${textColor} w-fit`}
+      >
+        <Icon className={`mr-1 h-3 w-3 ${isSpinning ? 'animate-spin' : ''}`} />
+        {displayStatus}
+      </span>
+      {statusInfo.progress && (
+        <span className="text-xs text-gray-500 mt-1">{statusInfo.progress}</span>
+      )}
+    </div>
   );
 };
 
@@ -482,8 +549,30 @@ const RecordingData = () => {
     }
   };
 
+  const ProcessingIndicator = ({ message }) => (
+    <div className="flex flex-col items-center justify-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="relative w-16 h-16 mb-4">
+        <div className="absolute inset-0 rounded-full border-4 border-indigo-100"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <FiLoader className="w-8 h-8 text-indigo-500 animate-spin" />
+        </div>
+      </div>
+      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Processing Your Content</h3>
+      <p className="text-gray-600 dark:text-gray-300 text-center max-w-md">
+        {message || 'This may take a few moments. Please wait while we process your recording...'}
+      </p>
+      <div className="mt-4 w-full max-w-xs bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+        <div className="bg-indigo-600 h-2.5 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+      </div>
+    </div>
+  );
+
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading recording metadata...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <ProcessingIndicator message="Loading recording details..." />
+      </div>
+    );
   }
   if (error) {
     return (
