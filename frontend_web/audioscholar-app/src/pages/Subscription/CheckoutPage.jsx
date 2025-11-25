@@ -8,6 +8,9 @@ const CheckoutPage = () => {
     const [tier, setTier] = useState(null);
     const [paymentDetails, setPaymentDetails] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+    const [successMessage, setSuccessMessage] = useState('');
+    const [secondaryMessage, setSecondaryMessage] = useState('');
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -34,6 +37,7 @@ const CheckoutPage = () => {
 
     const handleConfirm = () => {
         setIsLoading(true);
+
         console.log('Confirming subscription...', { tier, paymentDetails });
 
         // --- Mock Backend Call ---
@@ -46,11 +50,12 @@ const CheckoutPage = () => {
 
             if (!token || !userId) {
                 console.error('AuthToken or UserId not found. Cannot update role.');
-                alert('Subscription mock successful, but critical user information is missing to update your role. Please re-login or contact support.');
+                setSuccessMessage('We encountered an issue updating your account');
+                setSecondaryMessage('Critical user information is missing to update your role. Please re-login or contact support.');
+                setShowSuccessModal(true);
                 setIsLoading(false);
                 localStorage.removeItem('selectedTier');
                 localStorage.removeItem('paymentDetails');
-                navigate('/profile');
                 return;
             }
 
@@ -70,11 +75,15 @@ const CheckoutPage = () => {
                 if (response.status === 200 || response.status === 204) {
                     console.log('Successfully updated user role to ROLE_PREMIUM');
                     localStorage.setItem('userSubscriptionTier', tier);
-                    alert('Thank you for your purchase! Your Premium membership is now active.');
+                    setSuccessMessage('Thank you for your purchase!');
+                    setSecondaryMessage('Your Premium membership is now active and your account has been upgraded.');
+                    setShowSuccessModal(true);
                 } else {
                     console.error('Role update API call was not successful, status:', response.status);
                     localStorage.setItem('userSubscriptionTier', tier);
-                    alert('Subscription payment processed, but there was an issue updating your account privileges. Please contact support.');
+                    setSuccessMessage('Subscription completed, but with an issue');
+                    setSecondaryMessage('Your payment went through, but we could not update your account privileges automatically. Please contact support.');
+                    setShowSuccessModal(true);
                 }
 
             } catch (err) {
@@ -87,19 +96,21 @@ const CheckoutPage = () => {
                         errorMessage += ' It seems there was a permission issue.';
                     }
                 }
-                errorMessage += ' Please contact support.';
-                alert(errorMessage);
+                setSuccessMessage('We encountered an issue updating your account');
+                setSecondaryMessage(errorMessage + ' Please contact support if this persists.');
+                setShowSuccessModal(true);
             }
             
             localStorage.removeItem('selectedTier');
             localStorage.removeItem('paymentDetails');
             setIsLoading(false);
 
-            // Redirect to dashboard or profile page
-            // Potentially show a success message first
-            navigate('/profile'); // Redirect to profile page
-
         }, 1500); // Simulate 1.5 seconds delay
+    };
+
+    const handleCloseSuccessModal = () => {
+        setShowSuccessModal(false);
+        navigate('/profile');
     };
 
     const getPaymentDisplay = () => {
@@ -136,7 +147,7 @@ const CheckoutPage = () => {
 
             <main className="flex-grow flex items-center justify-center py-12">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="max-w-lg mx-auto bg-white p-8 rounded-lg shadow-xl">
+                    <div className="max-w-lg mx-auto bg-white p-8 rounded-lg shadow-xl relative">
                         <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Confirm Your Subscription</h1>
 
                         <div className="space-y-4 mb-8">
@@ -184,10 +195,33 @@ const CheckoutPage = () => {
                             Change Payment Method
                         </button>
                     </div>
+                    {showSuccessModal && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                            <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-6">
+                                <div className="flex flex-col items-center text-center">
+                                    <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                                        <svg className="w-7 h-7 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-gray-900 mb-2">{successMessage || 'Purchase complete'}</h2>
+                                    <p className="text-sm text-gray-600 mb-4">
+                                        {secondaryMessage || 'Your Premium membership details have been updated.'}
+                                    </p>
+                                    <button
+                                        onClick={handleCloseSuccessModal}
+                                        className="w-full mt-2 py-2.5 px-4 rounded-md text-sm font-medium text-white bg-[#2D8A8A] hover:bg-[#236b6b] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D8A8A] transition-colors"
+                                    >
+                                        Go to Profile
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </main>
         </div>
     );
 };
 
-export default CheckoutPage; 
+export default CheckoutPage;
