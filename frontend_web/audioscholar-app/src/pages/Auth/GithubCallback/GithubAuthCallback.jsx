@@ -11,11 +11,22 @@ const GithubAuthCallback = () => {
   const verificationAttempted = useRef(false);
 
   useEffect(() => {
+    // 1. Check if we are already authenticated. If so, skip verification and redirect.
+    // This handles cases where the user might refresh the callback page or back-button into it
+    // after already successfully exchanging the code.
+    const existingToken = localStorage.getItem('AuthToken');
+    if (existingToken) {
+      console.log('User already authenticated. Redirecting to dashboard...');
+      navigate('/dashboard');
+      return;
+    }
+
     const queryParams = new URLSearchParams(location.search);
     const code = queryParams.get('code');
     const githubError = queryParams.get('error');
     const errorDescription = queryParams.get('error_description');
 
+    // 2. Prevent double execution (React Strict Mode compatibility)
     if (verificationAttempted.current) return;
     verificationAttempted.current = true;
 
@@ -48,7 +59,8 @@ const GithubAuthCallback = () => {
           localStorage.setItem('userId', response.data.userId);
 
           setStatusMessage('Login successful! Redirecting...');
-          navigate('/dashboard');
+          // Small delay to ensure storage is set before redirect
+          setTimeout(() => navigate('/dashboard'), 100);
         } else {
           const backendErrorMsg = response.data?.message || 'Backend verification failed.';
           console.error('Backend verification failed:', backendErrorMsg);
@@ -58,6 +70,14 @@ const GithubAuthCallback = () => {
 
       } catch (err) {
         console.error('Error sending code to backend:', err);
+        
+        // Double check: Did the token get set despite the error? (Edge case race condition)
+        if (localStorage.getItem('AuthToken')) {
+             console.log('Token found despite error. Redirecting...');
+             navigate('/dashboard');
+             return;
+        }
+
         let errMsg = 'An error occurred during verification.';
         if (err.response && err.response.data && err.response.data.message) {
           errMsg = err.response.data.message;

@@ -178,12 +178,16 @@ const SignIn = () => {
 
         const handleGithubSignIn = () => {
                 setGithubLoading(true);
-                const githubClientId = 'Iv23liMzUNGL8JuXu40i';
+                const githubClientId = 'Ov23li4Q5QeQlmr2YtJj';
 
-                const isProduction = window.location.hostname === 'it342-g3-audioscholar.onrender.com';
-                const redirectBase = isProduction
-                        ? 'https://it342-g3-audioscholar.onrender.com'
-                        : window.location.origin;
+                // Determine the redirect URI based on the environment
+                const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+                
+                // Use the Frontend Callback URL.
+                // The frontend (GithubAuthCallback.jsx) will receive the code and then send it to the backend.
+                const redirectBase = isLocal 
+                    ? 'http://localhost:5173' 
+                    : 'https://it342-g3-audioscholar.onrender.com';
 
                 const redirectUri = `${redirectBase}/auth/github/callback`;
 

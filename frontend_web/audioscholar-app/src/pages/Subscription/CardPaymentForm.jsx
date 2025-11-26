@@ -159,7 +159,7 @@ const CardPaymentForm = ({ onSubmit }) => {
                         id="nameOnCard"
                         value={cardDetails.nameOnCard}
                         onChange={handleChange}
-                        placeholder="John Doe"
+                        placeholder="e.g. Juan Dela Cruz"
                         className={`block w-full pl-10 pr-3 py-2 border ${errors.nameOnCard ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] dark:bg-gray-700 dark:text-white sm:text-sm transition-colors duration-200`}
                         required
                     />

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '../Home/HomePage';
 import CardPaymentForm from './CardPaymentForm';
 import EWalletPaymentForm from './EWalletPaymentForm';
+import { FaCcVisa, FaCcMastercard } from 'react-icons/fa';
 
 const PaymentMethodPage = () => {
     const [paymentMethod, setPaymentMethod] = useState('card'); // Default to 'card'
@@ -34,13 +35,17 @@ const PaymentMethodPage = () => {
                             <div className="flex border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden">
                                 <button
                                     onClick={() => setPaymentMethod('card')}
-                                    className={`flex-1 py-3 px-4 text-sm font-medium focus:outline-none transition-colors duration-200 ${
+                                    className={`flex-1 py-3 px-4 text-sm font-medium focus:outline-none transition-colors duration-200 flex items-center justify-center space-x-2 ${
                                         paymentMethod === 'card' 
                                         ? 'bg-[#2D8A8A] text-white' 
                                         : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
                                     }`}
                                 >
-                                    Credit/Debit Card
+                                    <span>Credit/Debit Card</span>
+                                    <div className="flex space-x-1 items-center">
+                                        <FaCcVisa className="h-5 w-5" />
+                                        <FaCcMastercard className="h-5 w-5" />
+                                    </div>
                                 </button>
                                 <button
                                     onClick={() => setPaymentMethod('ewallet')}
