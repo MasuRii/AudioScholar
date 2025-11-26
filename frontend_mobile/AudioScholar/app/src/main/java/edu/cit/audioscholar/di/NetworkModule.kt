@@ -16,6 +16,7 @@ import edu.cit.audioscholar.data.local.UserDataStore
 import edu.cit.audioscholar.data.local.file.RecordingFileHandler
 import edu.cit.audioscholar.data.remote.service.ApiService
 import edu.cit.audioscholar.domain.repository.*
+import edu.cit.audioscholar.network.ServerConnectionManager
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.auth.Auth
@@ -28,56 +29,15 @@ import io.ktor.http.encodedPath
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import okhttp3.*
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.*
-
-@Singleton
-class TimeoutInterceptor @Inject constructor() : Interceptor {
-
-    companion object {
-        private const val UPLOAD_WRITE_TIMEOUT_SECONDS = 280L
-        private const val UPLOAD_READ_TIMEOUT_SECONDS =120L
-        private const val TAG = "TimeoutInterceptor"
-    }
-
-    @Throws(IOException::class)
-    override fun intercept(chain: Interceptor.Chain): Response {
-        val request = chain.request()
-
-        val isUploadRequest = request.method == "POST" &&
-                request.url.encodedPath.endsWith("/api/audio/upload")
-
-        if (isUploadRequest) {
-            Log.d(TAG, "Applying longer timeouts for /api/audio/upload request.")
-            val newChain = chain
-                .withConnectTimeout(chain.connectTimeoutMillis(), TimeUnit.MILLISECONDS)
-                .withWriteTimeout(UPLOAD_WRITE_TIMEOUT_SECONDS.toInt(), TimeUnit.SECONDS)
-                .withReadTimeout(UPLOAD_READ_TIMEOUT_SECONDS.toInt(), TimeUnit.SECONDS)
-
-            return newChain.proceed(request)
-        } else {
-            return chain.proceed(request)
-        }
-    }
-}
-
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-
-    // PROD_URL is the live Render server
-    private const val PROD_URL = "https://it342-g3-audioscholar-onrender-com.onrender.com/"
-    // DEV_URL is the local development server
-    private const val DEV_URL = "http://192.168.137.1:8080/"
-
-    // Default to PROD for Retrofit initialization (interceptor will handle switching)
-    private const val PRIMARY_BASE_URL = PROD_URL
 
     private const val PREFS_NAME = "AudioScholarPrefs"
     private const val TAG = "NetworkModule"
@@ -113,116 +73,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideFallbackInterceptor(): Interceptor {
-        val prodHttpUrl = PROD_URL.toHttpUrlOrNull()
-        val devHttpUrl = DEV_URL.toHttpUrlOrNull()
-
-        if (prodHttpUrl == null) Log.e(TAG, "FATAL: Could not parse PROD_URL: $PROD_URL")
-        if (devHttpUrl == null) Log.w(TAG, "WARNING: Could not parse DEV_URL: $DEV_URL")
-
-        return Interceptor { chain ->
-            val originalRequest: Request = chain.request()
-            var lastException: IOException? = null
-            var lastResponseCode: Int = -1
-
-            val isUploadRequest = originalRequest.method == "POST" &&
-                    originalRequest.url.encodedPath.endsWith("/api/audio/upload")
-
-            if (isUploadRequest) {
-                Log.d(TAG, "Upload request detected. Fallback interceptor will NOT retry this request.")
-                try {
-                    return@Interceptor chain.proceed(originalRequest)
-                } catch (e: IOException) {
-                    Log.e(TAG, "Upload request failed with IOException, rethrowing without fallback.", e)
-                    throw e
-                }
-            }
-
-            // Dynamic Switching Logic: Priority = DEV -> PROD
-
-            // 1. Attempt Development Server
-            if (devHttpUrl != null) {
-                val devUrl = originalRequest.url.newBuilder()
-                    .scheme(devHttpUrl.scheme)
-                    .host(devHttpUrl.host)
-                    .port(devHttpUrl.port)
-                    .build()
-                val devRequest = originalRequest.newBuilder().url(devUrl).build()
-                Log.d(TAG, "[Fallback] Attempting request to DEV URL: ${devRequest.url}")
-                try {
-                    val response = chain.proceed(devRequest)
-                    lastResponseCode = response.code
-                    if (response.isSuccessful || response.code < 500) {
-                        Log.d(TAG, "[Fallback] DEV URL request successful or client error (code: ${response.code}).")
-                        return@Interceptor response
-                    } else {
-                        Log.w(TAG, "[Fallback] DEV URL request failed with server error code: ${response.code}. Attempting PROD.")
-                        response.close()
-                    }
-                } catch (e: IOException) {
-                    Log.e(TAG, "[Fallback] DEV URL request failed with IOException (${e::class.java.simpleName}): ${e.message}. Attempting PROD.")
-                    lastException = e
-                }
-            } else {
-                Log.w(TAG, "[Fallback] DEV URL is invalid or not configured. Skipping.")
-            }
-
-            // 2. Attempt Production Server
-            if (prodHttpUrl != null) {
-                val prodUrl = originalRequest.url.newBuilder()
-                    .scheme(prodHttpUrl.scheme)
-                    .host(prodHttpUrl.host)
-                    .port(prodHttpUrl.port)
-                    .build()
-                val prodRequest = originalRequest.newBuilder().url(prodUrl).build()
-                Log.d(TAG, "[Fallback] Attempting request to PROD URL: ${prodRequest.url}")
-                try {
-                    val response = chain.proceed(prodRequest)
-                    lastResponseCode = response.code
-                    lastException = null // Clear previous dev exception if prod succeeds
-                    if (response.isSuccessful || response.code < 500) {
-                        Log.d(TAG, "[Fallback] PROD URL request successful (code: ${response.code}).")
-                        return@Interceptor response
-                    } else {
-                        Log.w(TAG, "[Fallback] PROD URL request failed with server error code: ${response.code}.")
-                        response.close()
-                        lastException = IOException("PROD request failed (HTTP ${response.code}) after DEV failed.")
-                    }
-                } catch (e: IOException) {
-                    Log.e(TAG, "[Fallback] PROD URL request failed with IOException (${e::class.java.simpleName}): ${e.message}.")
-                    lastException = e
-                }
-            } else {
-                Log.e(TAG, "[Fallback] PROD URL is invalid. Cannot fallback.")
-                if (lastException == null) {
-                    lastException = IOException("Both DEV and PROD URLs are invalid.")
-                }
-            }
-
-            Log.e(TAG, "[Fallback] All URL attempts (DEV, PROD) failed for non-upload request.")
-            throw lastException ?: IOException("All attempts failed. Last known HTTP code: $lastResponseCode")
-        }
-    }
-
-    @Provides
-    @Singleton
-    fun provideTimeoutInterceptor(): TimeoutInterceptor {
-        return TimeoutInterceptor()
-    }
-
-    @Provides
-    @Singleton
     fun provideOkHttpClient(
         loggingInterceptor: HttpLoggingInterceptor,
-        fallbackInterceptor: Interceptor,
-        authInterceptor: AuthInterceptor,
-        timeoutInterceptor: TimeoutInterceptor
+        authInterceptor: AuthInterceptor
     ): OkHttpClient {
         Log.d(TAG, "Providing OkHttpClient instance")
         return OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
-            .addInterceptor(fallbackInterceptor)
-            .addInterceptor(timeoutInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -239,9 +96,10 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient, gson: Gson): Retrofit {
-        Log.d(TAG, "Providing Retrofit instance with base URL: $PRIMARY_BASE_URL")
+        val dynamicUrl = ServerConnectionManager.currentBaseUrl
+        Log.d(TAG, "Providing Retrofit instance with base URL: $dynamicUrl")
         return Retrofit.Builder()
-            .baseUrl(PRIMARY_BASE_URL)
+            .baseUrl(dynamicUrl)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
@@ -324,8 +182,9 @@ object NetworkModule {
             }
 
             defaultRequest {
-                 url(PRIMARY_BASE_URL)
-                 Log.d("$TAG-Ktor", "Applying defaultRequest with base URL: $PRIMARY_BASE_URL")
+                 val dynamicUrl = ServerConnectionManager.currentBaseUrl
+                 url(dynamicUrl)
+                 Log.d("$TAG-Ktor", "Applying defaultRequest with base URL: $dynamicUrl")
             }
 
             install(ContentNegotiation) {

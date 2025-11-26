@@ -27,7 +27,7 @@ import edu.cit.audioscholar.R
 import edu.cit.audioscholar.ui.settings.SettingsViewModel
 import edu.cit.audioscholar.ui.settings.ThemeSetting
 import edu.cit.audioscholar.ui.theme.AudioScholarTheme
-import kotlinx.coroutines.delay
+import edu.cit.audioscholar.network.ServerConnectionManager
 import javax.inject.Inject
 
 @SuppressLint("CustomSplashScreen")
@@ -81,7 +81,8 @@ class SplashActivity : ComponentActivity() {
                     }
                     Log.d("SplashActivity", "Determined target destination: $targetDestination")
 
-                    delay(500)
+                    val selectedUrl = ServerConnectionManager.determineBestServer()
+                    Log.d("AppStartup", "Selected Server: $selectedUrl")
 
                     val intent = Intent(this@SplashActivity, MainActivity::class.java).apply {
                         putExtra(EXTRA_START_DESTINATION, targetDestination)
