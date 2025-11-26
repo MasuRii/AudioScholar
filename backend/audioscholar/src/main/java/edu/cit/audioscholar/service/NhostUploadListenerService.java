@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
@@ -14,6 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.lang.Nullable;
@@ -51,7 +53,13 @@ public class NhostUploadListenerService {
 	}
 
 	@RabbitListener(queues = RabbitMQConfig.UPLOAD_QUEUE_NAME)
-	public void handleNhostUploadRequest(NhostUploadMessage message) {
+	public void handleNhostUploadRequest(NhostUploadMessage message, Message amqpMessage) {
+		if (amqpMessage != null && amqpMessage.getMessageProperties() != null) {
+			Date timestamp = amqpMessage.getMessageProperties().getTimestamp();
+			log.info("[Nhost Upload Listener] Processing message for metadataId: {}. Message timestamp: {}",
+					message != null ? message.getMetadataId() : "null", timestamp);
+		}
+
 		if (message == null || message.getMetadataId() == null || message.getFileType() == null
 				|| message.getTempFilePath() == null || message.getOriginalFilename() == null
 				|| message.getOriginalContentType() == null) {
@@ -81,8 +89,12 @@ public class NhostUploadListenerService {
 			log.error(
 					"[Nhost Upload Listener] Temporary file for '{}' does not exist or cannot be read: {}. Setting to FAILED.",
 					fileType, tempFilePathStr);
-			updateStatus(metadataId, null, ProcessingStatus.FAILED,
-					"Temporary file missing/unreadable before upload: " + tempFilePath.getFileName());
+			try {
+				executeStatusUpdate(metadataId, null, ProcessingStatus.FAILED,
+						"Temporary file missing/unreadable before upload: " + tempFilePath.getFileName());
+			} catch (FirestoreInteractionException e) {
+				log.warn("Could not update status for missing file (stale message?): [{}]. Ignoring.", metadataId);
+			}
 			return;
 		}
 
@@ -187,25 +199,30 @@ public class NhostUploadListenerService {
 	private void updateStatus(String metadataId, @Nullable String userId, ProcessingStatus status,
 			@Nullable String reason) {
 		try {
-			Map<String, Object> updates = new HashMap<>();
-			updates.put("status", status.name());
-			updates.put("lastUpdated", Timestamp.now());
-			if (status == ProcessingStatus.FAILED) {
-				updates.put("failureReason", reason != null ? reason : "Unknown Failure");
-				log.error("[{}] Setting status to FAILED. Reason: {}", metadataId, updates.get("failureReason"));
-			} else {
-				updates.put("failureReason", null);
-			}
-			firebaseService.updateDataWithMap(firebaseService.getAudioMetadataCollectionName(), metadataId, updates);
-			log.info("[{}] Metadata status updated to {}.", metadataId, status);
-
-			if (status == ProcessingStatus.FAILED || status == ProcessingStatus.PROCESSING_QUEUED
-					|| status == ProcessingStatus.UPLOADED) {
-				invalidateUserCache(userId);
-			}
+			executeStatusUpdate(metadataId, userId, status, reason);
 		} catch (FirestoreInteractionException e) {
 			log.error("[{}] CRITICAL: Failed to update metadata status to {}. Error: {}", metadataId, status,
 					e.getMessage(), e);
+		}
+	}
+
+	private void executeStatusUpdate(String metadataId, @Nullable String userId, ProcessingStatus status,
+			@Nullable String reason) throws FirestoreInteractionException {
+		Map<String, Object> updates = new HashMap<>();
+		updates.put("status", status.name());
+		updates.put("lastUpdated", Timestamp.now());
+		if (status == ProcessingStatus.FAILED) {
+			updates.put("failureReason", reason != null ? reason : "Unknown Failure");
+			log.error("[{}] Setting status to FAILED. Reason: {}", metadataId, updates.get("failureReason"));
+		} else {
+			updates.put("failureReason", null);
+		}
+		firebaseService.updateDataWithMap(firebaseService.getAudioMetadataCollectionName(), metadataId, updates);
+		log.info("[{}] Metadata status updated to {}.", metadataId, status);
+
+		if (status == ProcessingStatus.FAILED || status == ProcessingStatus.PROCESSING_QUEUED
+				|| status == ProcessingStatus.UPLOADED) {
+			invalidateUserCache(userId);
 		}
 	}
 
