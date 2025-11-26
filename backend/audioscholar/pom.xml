@@ -27,7 +27,7 @@
 		<url/>
 	</scm>
 	<properties>
-		<java.version>24</java.version>
+		<java.version>21</java.version>
 		<dependency-check-maven.version>12.1.1</dependency-check-maven.version>
 		<jjwt.version>0.12.6</jjwt.version>
 	</properties>
@@ -65,6 +65,12 @@
 			<groupId>com.google.cloud</groupId>
 			<artifactId>google-cloud-firestore</artifactId>
 			<version>3.32.2</version>
+			<exclusions>
+				<exclusion>
+					<groupId>com.google.cloud</groupId>
+					<artifactId>google-cloud-document-ai</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>io.grpc</groupId>
@@ -286,6 +292,9 @@
 					<jvmArguments>
 						--enable-native-access=ALL-UNNAMED
 					</jvmArguments>
+					<layers>
+						<enabled>true</enabled>
+					</layers>
 				</configuration>
 			</plugin>
 

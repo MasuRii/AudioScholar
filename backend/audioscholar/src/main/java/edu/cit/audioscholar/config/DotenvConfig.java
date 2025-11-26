@@ -26,9 +26,8 @@ public class DotenvConfig {
 	@PostConstruct
 	public void loadDotenv() {
 		try {
-			// Load .env file from current directory
-			Dotenv dotenv = Dotenv.configure().filename(".env") // explicitly specify .env file
-					.load();
+			// Load .env file from current directory (optional)
+			Dotenv dotenv = Dotenv.configure().filename(".env").ignoreIfMissing().load();
 
 			Map<String, Object> dotenvProperties = new HashMap<>();
 
