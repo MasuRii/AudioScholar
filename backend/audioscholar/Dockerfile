@@ -24,6 +24,6 @@ COPY --from=builder /app/target/audioscholar-*.jar app.jar
 # Extract layers for faster startup (if supported) or just for structure
 RUN java -Djarmode=layertools -jar app.jar extract
 
-# Optimized ENTRYPOINT with container-aware JVM flags & Exploded JAR support
-# We run from the extracted layers to improve classloading speed
-ENTRYPOINT ["sh", "-c", "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:ActiveProcessorCount=1 $JAVA_OPTS -Djava.awt.headless=true --sun-misc-unsafe-memory-access=allow --enable-native-access=ALL-UNNAMED -noverify -XX:TieredStopAtLevel=1 org.springframework.boot.loader.launch.JarLauncher"]
+# Optimized ENTRYPOINT for exploded JAR (no -jar flag; use classpath instead)
+# We run from the extracted layers using -cp to point to specific directories
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:ActiveProcessorCount=1 -Djava.awt.headless=true -noverify -XX:TieredStopAtLevel=1 --enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow -cp dependencies/*:snapshot-dependencies/*:spring-boot-loader/*:application/* org.springframework.boot.loader.launch.JarLauncher"]
