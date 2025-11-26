@@ -1,6 +1,6 @@
 # ===================================================================
-# Stage 1: Build using Maven + Java 21
-FROM maven:3.9.9-eclipse-temurin-21 AS builder
+# Stage 1: Build using Maven + Java 24
+FROM maven:3.9-eclipse-temurin-24 AS builder
 WORKDIR /app
 
 # Copy POM and download dependencies (cacheable layer)
@@ -11,8 +11,8 @@ RUN mvn dependency:go-offline -B -Ddependency-check.skip=true
 COPY src ./src
 RUN mvn package -DskipTests -B -Ddependency-check.skip=true
 
-# Stage 2: Run using lightweight Java 21 JRE (Alpine for optimization)
-FROM eclipse-temurin:21-jre-alpine
+# Stage 2: Run using lightweight Java 24 JRE (Alpine for optimization)
+FROM eclipse-temurin:24-jre-alpine
 WORKDIR /app
 
 # Install font libraries (Required for Apache POI/PDFBox) - Alpine equivalent
@@ -21,5 +21,5 @@ RUN apk add --no-cache fontconfig ttf-dejavu
 # Copy the built application
 COPY --from=builder /app/target/audioscholar-*.jar app.jar
 
-# Optimized ENTRYPOINT with container-aware JVM flags
-ENTRYPOINT ["sh", "-c", "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC -XX:ActiveProcessorCount=1 $JAVA_OPTS -Djava.awt.headless=true -jar app.jar"]
+# Optimized ENTRYPOINT with Java 24 Compact Object Headers (Single Line)
+ENTRYPOINT ["java", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseCompactObjectHeaders", "-XX:+UseSerialGC", "-Xss256k", "-XX:MaxRAMPercentage=60.0", "-XX:ActiveProcessorCount=2", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
