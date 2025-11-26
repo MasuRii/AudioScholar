@@ -41,5 +41,5 @@ ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS \
   -XX:MaxRAMPercentage=75.0 \
   -XX:ActiveProcessorCount=1 \
   -Djava.awt.headless=true \
-  -cp 'dependencies/:snapshot-dependencies/:spring-boot-loader/:application/' \
+  -cp 'dependencies/*:snapshot-dependencies/*:spring-boot-loader/:application/' \
   org.springframework.boot.loader.launch.JarLauncher"]
