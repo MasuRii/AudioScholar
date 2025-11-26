@@ -402,7 +402,7 @@ const TeamSection = () => {
         { name: "Math Lee L. Biacolo", role: "Developer", imgSrc: "/448017950_422357707435559_1572405260216380511_n.jpg" },
         { name: "Nathan John G. Orlanes", role: "Developer", imgSrc: "/120552317_4626392360735881_682202529014384747_n (1).jpg" },
         { name: "Terence John N. Duterte", role: "Developer", imgSrc: "/image.jpg" },
-        { name: "Christian Brent G. Alpez", role: "Developer", imgSrc: "/image.jpg" },
+        { name: "Christian Brent G. Alpez", role: "Developer", imgSrc: "/Alpez.jpg" },
         { name: "Claive Justin J. Barrientos", role: "Developer", imgSrc: "/Barrientos.jpg" },
     ];
 
