@@ -1,4 +1,4 @@
-# Build
+# Build (unchanged – still fast and cached)
 FROM maven:3.9.9-eclipse-temurin-24 AS builder
 WORKDIR /app
 COPY pom.xml .
@@ -6,14 +6,15 @@ RUN mvn dependency:go-offline -B
 COPY src ./src
 RUN mvn package -DskipTests -B
 
-# Runtime – absolute smallest possible image that still works with POI/PDFBox
+# Runtime – stripped to the bone (no fonts, no AWT, no native libs)
 FROM eclipse-temurin:24-jre-alpine
+
 WORKDIR /app
 
-# Tiny font set – enough for headless PDF/Excel generation
-RUN apk add --no-cache fontconfig ttf-dejavu msttcorefonts-installer && update-ms-fonts && fc-cache -f
+# Literally nothing else to install – no fonts, no freetype, no msttcorefonts
+# (You removed POI/PDFBox → zero need)
 
 COPY --from=builder /app/target/audioscholar-*.jar app.jar
 
-# 512-MB-tuned, ultra-safe JVM flags
-ENTRYPOINT ["sh", "-c", "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=82.0 -XX:+UseZGC -XX:CompressedClassSpaceSize=12m -XX:ReservedCodeCacheSize=32m -Djava.awt.headless=true $JAVA_OPTS -jar app.jar"]
+# Ultra-tuned for 512 MB Render + pure API workload
+ENTRYPOINT ["sh", "-c", "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=85.0 -XX:+UseZGC -XX:CompressedClassSpaceSize=10m -XX:ReservedCodeCacheSize=24m -Djava.awt.headless=true $JAVA_OPTS -jar app.jar"]
