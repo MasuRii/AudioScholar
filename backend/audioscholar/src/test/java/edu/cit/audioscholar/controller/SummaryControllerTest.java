@@ -55,8 +55,6 @@ public class SummaryControllerTest {
 	@BeforeEach
 	void setUp() {
 		mockMvc = MockMvcBuilders.standaloneSetup(summaryController).build();
-		Jwt jwt = Jwt.withTokenValue("token").header("alg", "none").claim("sub", TEST_USER_ID).build();
-		Authentication auth = new UsernamePasswordAuthenticationToken(jwt, null, Collections.emptyList());
 		// SecurityContextHolder.getContext().setAuthentication(auth); // The controller
 		// gets it as a parameter
 	}

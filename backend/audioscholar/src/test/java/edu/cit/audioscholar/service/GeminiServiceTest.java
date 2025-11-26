@@ -44,7 +44,6 @@ class GeminiServiceTest {
 	private static final String API_KEY = "test-api-key";
 	private static final String PROMPT_TEXT = "Test prompt";
 	private static final String TRANSCRIPT_TEXT = "Test transcript text";
-	private static final String METADATA_ID = "test-metadata-id";
 
 	@BeforeEach
 	void setUp() {
@@ -89,7 +88,7 @@ class GeminiServiceTest {
 			ResponseEntity<String> transResponse = new ResponseEntity<>(transcriptionResponse, HttpStatus.OK);
 
 			// We need to capture the argument to verify the prompt
-			ArgumentCaptor<HttpEntity> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+			ArgumentCaptor<HttpEntity<String>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
 			when(restTemplate.exchange(contains(":generateContent"), eq(HttpMethod.POST), entityCaptor.capture(),
 					eq(String.class))).thenReturn(transResponse);
 
@@ -97,7 +96,7 @@ class GeminiServiceTest {
 			geminiService.callGeminiTranscriptionAPIWithFallback(tempFile, "test-audio.mp3");
 
 			// Then
-			HttpEntity capturedEntity = entityCaptor.getValue();
+			HttpEntity<String> capturedEntity = entityCaptor.getValue();
 			String body = capturedEntity.getBody().toString();
 
 			String expectedPrompt = "Transcribe the following audio content accurately. If the audio contains no speech or only silence, output the exact text '[NO SPEECH DETECTED]' in the transcript field. Otherwise, output only the spoken text. Maintain original punctuation, capitalization, and paragraph breaks as best as possible. For numbers, spell them as digits if they represent quantities or measurements, and as words if they are part of natural speech. Include any hesitations, repetitions, or fillers that are meaningful to the content.";
