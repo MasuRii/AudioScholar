@@ -603,6 +603,14 @@ class AuthRepositoryImpl @Inject constructor(
 
             if (response.isSuccessful) {
                 Log.i(TAG_AUTH_REPO, "User role updated successfully to: $role")
+                // Refresh user profile to reflect the new role locally
+                val profileResponse = apiService.getUserProfile()
+                if (profileResponse.isSuccessful && profileResponse.body() != null) {
+                    userDataStore.saveUserProfile(profileResponse.body()!!)
+                    Log.d(TAG_AUTH_REPO, "User profile refreshed after role update.")
+                } else {
+                    Log.w(TAG_AUTH_REPO, "Failed to refresh user profile after role update.")
+                }
                 Resource.Success(Unit)
             } else {
                 val errorBody = response.errorBody()?.string()

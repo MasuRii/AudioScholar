@@ -71,9 +71,13 @@ class TimeoutInterceptor @Inject constructor() : Interceptor {
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val PRIMARY_BASE_URL = BuildConfig.BASE_URL
-    private const val FALLBACK_URL_1 = "http://192.168.137.1:8080/"
-    private const val FALLBACK_URL_2 = "http://192.168.137.1:8080/"
+    // PROD_URL is the live Render server
+    private const val PROD_URL = "https://it342-g3-audioscholar-onrender-com.onrender.com/"
+    // DEV_URL is the local development server
+    private const val DEV_URL = "http://192.168.137.1:8080/"
+
+    // Default to PROD for Retrofit initialization (interceptor will handle switching)
+    private const val PRIMARY_BASE_URL = PROD_URL
 
     private const val PREFS_NAME = "AudioScholarPrefs"
     private const val TAG = "NetworkModule"
@@ -110,13 +114,11 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideFallbackInterceptor(): Interceptor {
-        val primaryHttpUrl = PRIMARY_BASE_URL.toHttpUrlOrNull()
-        val fallback1HttpUrl = FALLBACK_URL_1.toHttpUrlOrNull()
-        val fallback2HttpUrl = FALLBACK_URL_2.toHttpUrlOrNull()
+        val prodHttpUrl = PROD_URL.toHttpUrlOrNull()
+        val devHttpUrl = DEV_URL.toHttpUrlOrNull()
 
-        if (primaryHttpUrl == null) Log.e(TAG, "FATAL: Could not parse PRIMARY_BASE_URL: $PRIMARY_BASE_URL")
-        if (fallback1HttpUrl == null) Log.w(TAG, "WARNING: Could not parse FALLBACK_URL_1: $FALLBACK_URL_1.")
-        if (fallback2HttpUrl == null) Log.w(TAG, "WARNING: Could not parse FALLBACK_URL_2: $FALLBACK_URL_2.")
+        if (prodHttpUrl == null) Log.e(TAG, "FATAL: Could not parse PROD_URL: $PROD_URL")
+        if (devHttpUrl == null) Log.w(TAG, "WARNING: Could not parse DEV_URL: $DEV_URL")
 
         return Interceptor { chain ->
             val originalRequest: Request = chain.request()
@@ -136,100 +138,68 @@ object NetworkModule {
                 }
             }
 
+            // Dynamic Switching Logic: Priority = DEV -> PROD
 
-            if (primaryHttpUrl != null) {
-                val primaryUrl = originalRequest.url.newBuilder()
-                    .scheme(primaryHttpUrl.scheme)
-                    .host(primaryHttpUrl.host)
-                    .port(primaryHttpUrl.port)
+            // 1. Attempt Development Server
+            if (devHttpUrl != null) {
+                val devUrl = originalRequest.url.newBuilder()
+                    .scheme(devHttpUrl.scheme)
+                    .host(devHttpUrl.host)
+                    .port(devHttpUrl.port)
                     .build()
-                val primaryRequest = originalRequest.newBuilder().url(primaryUrl).build()
-                Log.d(TAG, "[Fallback] Attempting request to primary URL: ${primaryRequest.url}")
+                val devRequest = originalRequest.newBuilder().url(devUrl).build()
+                Log.d(TAG, "[Fallback] Attempting request to DEV URL: ${devRequest.url}")
                 try {
-                    val response = chain.proceed(primaryRequest)
+                    val response = chain.proceed(devRequest)
                     lastResponseCode = response.code
                     if (response.isSuccessful || response.code < 500) {
-                        Log.d(TAG, "[Fallback] Primary URL request successful or client error (code: ${response.code}).")
+                        Log.d(TAG, "[Fallback] DEV URL request successful or client error (code: ${response.code}).")
                         return@Interceptor response
                     } else {
-                        Log.w(TAG, "[Fallback] Primary URL request failed with server error code: ${response.code}. Attempting fallback 1.")
+                        Log.w(TAG, "[Fallback] DEV URL request failed with server error code: ${response.code}. Attempting PROD.")
                         response.close()
                     }
                 } catch (e: IOException) {
-                    Log.e(TAG, "[Fallback] Primary URL request failed with IOException (${e::class.java.simpleName}): ${e.message}. Attempting fallback 1.")
+                    Log.e(TAG, "[Fallback] DEV URL request failed with IOException (${e::class.java.simpleName}): ${e.message}. Attempting PROD.")
                     lastException = e
                 }
             } else {
-                Log.e(TAG, "[Fallback] Primary URL is invalid. Skipping primary attempt.")
-                lastException = IOException("Primary Base URL '$PRIMARY_BASE_URL' is invalid.")
+                Log.w(TAG, "[Fallback] DEV URL is invalid or not configured. Skipping.")
             }
 
-            if (fallback1HttpUrl != null) {
-                val fallback1Url = originalRequest.url.newBuilder()
-                    .scheme(fallback1HttpUrl.scheme)
-                    .host(fallback1HttpUrl.host)
-                    .port(fallback1HttpUrl.port)
+            // 2. Attempt Production Server
+            if (prodHttpUrl != null) {
+                val prodUrl = originalRequest.url.newBuilder()
+                    .scheme(prodHttpUrl.scheme)
+                    .host(prodHttpUrl.host)
+                    .port(prodHttpUrl.port)
                     .build()
-                val fallback1Request = originalRequest.newBuilder().url(fallback1Url).build()
-                Log.w(TAG, "[Fallback] Attempting fallback request 1 to: $fallback1Url")
+                val prodRequest = originalRequest.newBuilder().url(prodUrl).build()
+                Log.d(TAG, "[Fallback] Attempting request to PROD URL: ${prodRequest.url}")
                 try {
-                    val response = chain.proceed(fallback1Request)
+                    val response = chain.proceed(prodRequest)
                     lastResponseCode = response.code
-                    lastException = null
+                    lastException = null // Clear previous dev exception if prod succeeds
                     if (response.isSuccessful || response.code < 500) {
-                        Log.d(TAG, "[Fallback] Fallback URL 1 request successful (code: ${response.code}).")
+                        Log.d(TAG, "[Fallback] PROD URL request successful (code: ${response.code}).")
                         return@Interceptor response
                     } else {
-                        Log.w(TAG, "[Fallback] Fallback URL 1 request failed with server error code: ${response.code}. Attempting fallback 2.")
+                        Log.w(TAG, "[Fallback] PROD URL request failed with server error code: ${response.code}.")
                         response.close()
+                        lastException = IOException("PROD request failed (HTTP ${response.code}) after DEV failed.")
                     }
                 } catch (e: IOException) {
-                    Log.e(TAG, "[Fallback] Fallback URL 1 request failed with IOException (${e::class.java.simpleName}): ${e.message}. Attempting fallback 2.")
+                    Log.e(TAG, "[Fallback] PROD URL request failed with IOException (${e::class.java.simpleName}): ${e.message}.")
                     lastException = e
                 }
             } else {
-                Log.w(TAG, "[Fallback] Fallback URL 1 is invalid. Skipping fallback 1 attempt.")
-                if (lastException == null && lastResponseCode >= 500) {
-                    lastException = IOException("Primary request failed (HTTP $lastResponseCode) and Fallback URL 1 '$FALLBACK_URL_1' is invalid.")
-                } else if (lastException == null) {
-                    lastException = IOException("Primary and Fallback URL 1 are invalid.")
+                Log.e(TAG, "[Fallback] PROD URL is invalid. Cannot fallback.")
+                if (lastException == null) {
+                    lastException = IOException("Both DEV and PROD URLs are invalid.")
                 }
             }
 
-            if (fallback2HttpUrl != null) {
-                val fallback2Url = originalRequest.url.newBuilder()
-                    .scheme(fallback2HttpUrl.scheme)
-                    .host(fallback2HttpUrl.host)
-                    .port(fallback2HttpUrl.port)
-                    .build()
-                val fallback2Request = originalRequest.newBuilder().url(fallback2Url).build()
-                Log.w(TAG, "[Fallback] Attempting fallback request 2 to: $fallback2Url")
-                try {
-                    val response = chain.proceed(fallback2Request)
-                    lastResponseCode = response.code
-                    lastException = null
-                    if (response.isSuccessful || response.code < 500) {
-                        Log.d(TAG, "[Fallback] Fallback URL 2 request successful (code: ${response.code}).")
-                        return@Interceptor response
-                    } else {
-                        Log.w(TAG, "[Fallback] Fallback URL 2 request also failed with server error code: ${response.code}. All attempts failed.")
-                        response.close()
-                        lastException = IOException("All attempts failed. Last attempt (Fallback 2) resulted in HTTP code: $lastResponseCode")
-                    }
-                } catch (e: IOException) {
-                    Log.e(TAG, "[Fallback] Fallback URL 2 request also failed with IOException (${e::class.java.simpleName}): ${e.message}. All attempts failed.")
-                    lastException = e
-                }
-            } else {
-                Log.w(TAG, "[Fallback] Fallback URL 2 is invalid. Skipping fallback 2 attempt.")
-                if (lastException == null && lastResponseCode >= 500) {
-                    lastException = IOException("Previous attempts failed (last code: $lastResponseCode) and Fallback URL 2 '$FALLBACK_URL_2' is invalid.")
-                } else if (lastException == null) {
-                    lastException = IOException("All Base URLs (Primary, Fallback 1, Fallback 2) are invalid.")
-                }
-            }
-
-            Log.e(TAG, "[Fallback] All URL attempts (Primary, Fallback 1, Fallback 2) failed for non-upload request.")
+            Log.e(TAG, "[Fallback] All URL attempts (DEV, PROD) failed for non-upload request.")
             throw lastException ?: IOException("All attempts failed. Last known HTTP code: $lastResponseCode")
         }
     }

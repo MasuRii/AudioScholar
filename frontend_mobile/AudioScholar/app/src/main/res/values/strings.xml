@@ -152,8 +152,8 @@
     <string name="settings_password_validation_number">At least 1 number</string>
     <string name="settings_password_validation_special">At least 1 special character (!@#$%%^&amp;*())</string>
     <string name="settings_password_validation_match">Passwords do not match</string>
-    <string name="settings_password_validation_current_mock_error">Incorrect current password (Mock)</string>
-    <string name="settings_password_change_success">Password changed successfully (Mock)</string>
+    <string name="settings_password_validation_current_mock_error">Incorrect current password.</string>
+    <string name="settings_password_change_success">Password changed successfully.</string>
     <string name="cd_toggle_password_visibility">Toggle password visibility</string>
     <string name="settings_password_validation_check_fields">Please check the fields for errors.</string>
     <string name="settings_password_form_invalid">Please correct the errors above.</string>
@@ -292,8 +292,10 @@
     <string name="about_feature_youtube">Get YouTube video recommendations</string>
     <string name="about_feature_login">Secure login via Email, Google, GitHub</string>
     <string name="about_feature_sync">Optional cloud sync with Nhost</string>
-    <string name="about_developer_credits_title">Developed By:</string>
-    <string name="about_developer_adviser">Adviser: Frederick L. Revilleza</string>
+    <string name="about_developer_credits_title">Crafted by:</string>
+    <string name="about_advisers_title">Advisers:</string>
+    <string name="about_developer_adviser">Capstone Adviser / Overall Lead: Ralph P. Laviste</string>
+    <string name="about_developer_adviser_group">Group Adviser: Jasmine A. Tulin</string>
     <string name="about_developer_institution">Cebu Institute of Technology – University (CITU)</string>
     <string name="about_button_contact_support">Contact Support</string>
     <string name="about_link_privacy_policy">Privacy Policy</string>

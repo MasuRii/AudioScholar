@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -149,9 +150,10 @@ fun SettingsScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 16.dp)
                 ) {
-                    Text(
-                        text = legalSheetContent.value,
+                    MarkdownText(
+                        markdown = legalSheetContent.value,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 TextButton(

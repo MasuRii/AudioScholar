@@ -42,6 +42,7 @@ data class RegistrationUiState(
     val confirmPassword: String = "",
     val termsAccepted: Boolean = false,
     val isPasswordVisible: Boolean = false,
+    val isConfirmPasswordVisible: Boolean = false,
     val registrationInProgress: Boolean = false,
     val isGoogleRegistrationLoading: Boolean = false,
     val isGitHubRegistrationLoading: Boolean = false,
@@ -122,6 +123,10 @@ class RegistrationViewModel @Inject constructor(
     }
     fun togglePasswordVisibility() {
         _uiState.update { it.copy(isPasswordVisible = !it.isPasswordVisible) }
+    }
+
+    fun toggleConfirmPasswordVisibility() {
+        _uiState.update { it.copy(isConfirmPasswordVisible = !it.isConfirmPasswordVisible) }
     }
 
     private fun isValidName(name: String): Boolean {
