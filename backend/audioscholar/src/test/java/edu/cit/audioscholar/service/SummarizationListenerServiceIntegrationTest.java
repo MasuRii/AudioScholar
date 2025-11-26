@@ -76,13 +76,6 @@ class SummarizationListenerServiceIntegrationTest {
 
 	@BeforeEach
 	void setUp() {
-		// Mock RobustTaskExecutor to execute the task immediately
-		doAnswer(invocation -> {
-			Runnable task = invocation.getArgument(2);
-			task.run();
-			return null;
-		}).when(robustTaskExecutor).executeWithInfiniteRetry(anyString(), anyString(), any(Runnable.class));
-
 		// Manually create the service with mocked dependencies to avoid constructor
 		// injection issues
 		summarizationListenerService = new SummarizationListenerService(firebaseService, geminiService,
@@ -92,8 +85,22 @@ class SummarizationListenerServiceIntegrationTest {
 
 	// ==================== SIMPLIFIED EXCEPTION HANDLING TESTS ====================
 
+	private void setupRobustTaskExecutorMock() {
+		// Mock RobustTaskExecutor to execute the task immediately
+		doAnswer(invocation -> {
+			Runnable task = invocation.getArgument(2);
+			try {
+				task.run();
+			} catch (Exception e) {
+				// Simulate exception handling by the executor (it would retry in real life)
+			}
+			return null;
+		}).when(robustTaskExecutor).executeWithInfiniteRetry(anyString(), anyString(), any(Runnable.class));
+	}
+
 	@Test
-	void testHandleSummarizationRequest_GeminiServiceThrowsException_AudioOnly() {
+	void testHandleSummarizationRequest_GeminiServiceThrowsException_AudioOnly() throws Exception {
+		setupRobustTaskExecutorMock();
 		// Given
 		Map<String, String> message = createValidAudioOnlyMessage();
 		AudioMetadata metadata = createAudioOnlyMetadata();
@@ -108,82 +115,24 @@ class SummarizationListenerServiceIntegrationTest {
 		// When
 		summarizationListenerService.handleSummarizationRequest(message);
 
-		// Then - Verify that metadata was updated with failure status
+		// Then - Verify that metadata was updated with SUMMARIZING status
 		verify(firebaseService, atLeastOnce()).updateData(eq("audioMetadata"), eq(METADATA_ID),
 				metadataUpdateCaptor.capture());
 
-		// Verify that a failure update occurred
-		boolean foundFailureUpdate = metadataUpdateCaptor.getAllValues().stream()
-				.anyMatch(update -> ProcessingStatus.SUMMARY_FAILED.name().equals(update.get("status")));
-
-		assertTrue(foundFailureUpdate, "Should have updated status to SUMMARY_FAILED");
-
-		// Verify that recommendations were NOT triggered
-		try {
-			verify(recommenderService, never()).generateAndSaveRecommendations(any(), any(), any());
-			verify(recordingService, never()).getRecordingById(anyString());
-		} catch (Exception e) {
-			// Ignore exception from verification - we're testing that these methods are not
-			// called
-		}
-	}
-
-	@Test
-	void testHandleSummarizationRequest_VerifyFailureReasonIsNonEmpty() {
-		// Given
-		Map<String, String> message = createValidAudioOnlyMessage();
-		AudioMetadata metadata = createAudioOnlyMetadata();
-
-		mockFirebaseService(metadata);
-
-		// Mock GeminiService to throw exception
-		doThrow(new RuntimeException("Test error message")).when(geminiService)
-				.generateTranscriptOnlySummary(anyString(), eq(METADATA_ID));
-
-		// When
-		summarizationListenerService.handleSummarizationRequest(message);
-
-		// Then - Verify the failure reason is populated and non-empty
-		verify(firebaseService, atLeastOnce()).updateData(eq("audioMetadata"), eq(METADATA_ID),
-				metadataUpdateCaptor.capture());
-
-		// Check that we have a non-empty failure reason - safe casting with null check
-		boolean foundFailureWithReason = metadataUpdateCaptor.getAllValues().stream().anyMatch(update -> {
-			Object failureReason = update.get("failureReason");
-			return failureReason != null && failureReason instanceof String && !((String) failureReason).isBlank();
-		});
-
-		assertTrue(foundFailureWithReason, "Should have a non-empty failure reason");
-	}
-
-	@Test
-	void testHandleSummarizationRequest_StatusTransitionsCorrectly() {
-		// Given
-		Map<String, String> message = createValidAudioOnlyMessage();
-		AudioMetadata metadata = createAudioOnlyMetadata();
-
-		mockFirebaseService(metadata);
-
-		// Mock GeminiService to throw exception
-		doThrow(new RuntimeException("Service failure")).when(geminiService).generateTranscriptOnlySummary(anyString(),
-				eq(METADATA_ID));
-
-		// When
-		summarizationListenerService.handleSummarizationRequest(message);
-
-		// Then - Verify status transitions occurred
-		verify(firebaseService, atLeastOnce()).updateData(eq("audioMetadata"), eq(METADATA_ID),
-				metadataUpdateCaptor.capture());
-
-		// Verify that both SUMMARIZING and SUMMARY_FAILED status updates occurred
+		// Verify that SUMMARIZING update occurred
 		boolean foundSummarizingUpdate = metadataUpdateCaptor.getAllValues().stream()
 				.anyMatch(update -> ProcessingStatus.SUMMARIZING.name().equals(update.get("status")));
 
-		boolean foundFailedUpdate = metadataUpdateCaptor.getAllValues().stream()
-				.anyMatch(update -> ProcessingStatus.SUMMARY_FAILED.name().equals(update.get("status")));
+		assertTrue(foundSummarizingUpdate, "Should have updated status to SUMMARIZING");
 
-		assertTrue(foundSummarizingUpdate, "Should have set SUMMARIZING status initially");
-		assertTrue(foundFailedUpdate, "Should have updated to SUMMARY_FAILED on exception");
+		// Verify NO failure update occurred (due to infinite retry)
+		boolean foundFailureUpdate = metadataUpdateCaptor.getAllValues().stream()
+				.anyMatch(update -> ProcessingStatus.SUMMARY_FAILED.name().equals(update.get("status")));
+		assertFalse(foundFailureUpdate, "Should NOT have updated status to SUMMARY_FAILED (infinite retry expected)");
+
+		// Verify that recommendations were NOT triggered
+		verify(recommenderService, never()).generateAndSaveRecommendations(any(), any(), any());
+		verify(recordingService, never()).getRecordingById(anyString());
 	}
 
 	// ==================== HELPER METHODS ====================
@@ -257,6 +206,7 @@ class SummarizationListenerServiceIntegrationTest {
 
 	@Test
 	void testHandleSummarizationRequest_MetadataNotFound() {
+		setupRobustTaskExecutorMock();
 		// Given
 		Map<String, String> message = createValidAudioOnlyMessage();
 

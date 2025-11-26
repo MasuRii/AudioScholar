@@ -12,6 +12,7 @@ public class Recording {
 	private String recordingId;
 	private String userId;
 	private String title;
+	private String description;
 	private String audioUrl;
 	private Date createdAt;
 	private Date updatedAt;
@@ -56,6 +57,14 @@ public class Recording {
 
 	public void setTitle(String title) {
 		this.title = title;
+	}
+
+	public String getDescription() {
+		return description;
+	}
+
+	public void setDescription(String description) {
+		this.description = description;
 	}
 
 	public String getAudioUrl() {
@@ -122,6 +131,8 @@ public class Recording {
 			map.put("userId", userId);
 		if (title != null)
 			map.put("title", title);
+		if (description != null)
+			map.put("description", description);
 		if (audioUrl != null)
 			map.put("audioUrl", audioUrl);
 		if (createdAt != null)
@@ -148,6 +159,7 @@ public class Recording {
 		recording.recordingId = (String) map.get("recordingId");
 		recording.userId = (String) map.get("userId");
 		recording.title = (String) map.get("title");
+		recording.description = (String) map.get("description");
 		recording.audioUrl = (String) map.get("audioUrl");
 
 		Object createdAtObj = map.get("createdAt");
@@ -205,6 +217,7 @@ public class Recording {
 		recording.recordingId = documentId;
 		recording.userId = (String) map.get("userId");
 		recording.title = (String) map.get("title");
+		recording.description = (String) map.get("description");
 		recording.audioUrl = (String) map.get("audioUrl");
 
 		Object createdAtObj = map.get("createdAt");
