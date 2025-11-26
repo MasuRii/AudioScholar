@@ -9,4 +9,4 @@ FROM eclipse-temurin:24-jre-alpine
 WORKDIR /app
 COPY --from=builder /app/target/audioscholar-*.jar app.jar
 
-ENTRYPOINT ["sh", "-c", "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=88.0 -XX:+UseZGC -XX:CompressedClassSpaceSize=10m -XX:ReservedCodeCacheSize=24m -Djava.awt.headless=true $JAVA_OPTS -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=85.0 -XX:+UseZGC -XX:CompressedClassSpaceSize=10m -XX:ReservedCodeCacheSize=24m -Djava.awt.headless=true $JAVA_OPTS -jar app.jar"]
