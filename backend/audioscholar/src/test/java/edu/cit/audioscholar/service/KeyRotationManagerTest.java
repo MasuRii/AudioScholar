@@ -1,7 +1,7 @@
 package edu.cit.audioscholar.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import edu.cit.audioscholar.exception.KeysExhaustedException;
 import edu.cit.audioscholar.model.KeyProvider;
 
 class KeyRotationManagerTest {
@@ -97,10 +98,10 @@ class KeyRotationManagerTest {
 		keyRotationManager.reportError(KeyProvider.GEMINI, "keyX", 429);
 		keyRotationManager.reportError(KeyProvider.GEMINI, "keyY", 429);
 
-		// Should still return a key (fallback behavior) rather than failing
-		String forcedKey = keyRotationManager.getKey(KeyProvider.GEMINI);
-		assertNotNull(forcedKey);
-		assertTrue(forcedKey.equals("keyX") || forcedKey.equals("keyY"));
+		// Now, getting a key should throw KeysExhaustedException
+		assertThrows(KeysExhaustedException.class, () -> {
+			keyRotationManager.getKey(KeyProvider.GEMINI);
+		});
 	}
 
 	@Test

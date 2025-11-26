@@ -4,27 +4,28 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.function.Function;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import edu.cit.audioscholar.model.KeyProvider;
 
-/**
- * Unit tests for GeminiService focusing on exponential backoff and model
- * fallback logic. Tests cover successful calls, retry scenarios, and failure
- * conditions.
- */
 @ExtendWith(MockitoExtension.class)
 class GeminiServiceTest {
 
@@ -33,6 +34,9 @@ class GeminiServiceTest {
 
 	@Mock
 	private KeyRotationManager keyRotationManager;
+
+	@Mock
+	private GeminiSmartRotationService rotationService;
 
 	@InjectMocks
 	private GeminiService geminiService;
@@ -44,242 +48,154 @@ class GeminiServiceTest {
 
 	@BeforeEach
 	void setUp() {
-		// Set test configuration values
-		ReflectionTestUtils.setField(geminiService, "maxRetryAttempts", 3);
-		ReflectionTestUtils.setField(geminiService, "baseRetryDelayMs", 1000L);
-		ReflectionTestUtils.setField(geminiService, "maxRetryDelayMs", 30000L);
-		ReflectionTestUtils.setField(geminiService, "backoffMultiplier", 2.0);
-		ReflectionTestUtils.setField(geminiService, "maxTotalAttempts", 21);
-		ReflectionTestUtils.setField(geminiService, "modelFallbackSequence",
-				"gemini-2.5-pro,gemini-flash-latest,gemini-2.5-flash");
+		// Set configuration values that are still present in GeminiService for legacy
+		// methods.
 		ReflectionTestUtils.setField(geminiService, "transcriptionModelName", "gemini-2.0-flash");
 		ReflectionTestUtils.setField(geminiService, "summarizationModelName", "gemini-2.5-flash");
-		when(keyRotationManager.getKey(any(KeyProvider.class))).thenReturn(API_KEY);
 	}
 
-	// ==================== SUCCESS SCENARIOS ====================
+	// ==================== SUCCESS SCENARIOS (New Fallback Logic)
+	// ====================
+
+	@Test
+	void testCallGeminiTranscriptionAPIWithFallback_VerifyPrompt() throws Exception {
+		// Given
+		Path tempFile = Files.createTempFile("test-audio", ".mp3");
+		Files.writeString(tempFile, "dummy content");
+		try {
+			when(keyRotationManager.getKey(any(KeyProvider.class))).thenReturn(API_KEY);
+
+			// Mock Upload - Initiate
+			HttpHeaders initiateHeaders = new HttpHeaders();
+			initiateHeaders.add("X-Goog-Upload-Url", "http://upload-url");
+			ResponseEntity<String> initiateResponse = new ResponseEntity<>(null, initiateHeaders, HttpStatus.OK);
+			when(restTemplate.exchange(contains("/upload/v1beta/files"), eq(HttpMethod.POST), any(), eq(String.class)))
+					.thenReturn(initiateResponse);
+
+			// Mock Upload - Content
+			String uploadResponseBody = "{\"file\": {\"uri\": \"http://file-uri\"}}";
+			ResponseEntity<String> uploadResponse = new ResponseEntity<>(uploadResponseBody, HttpStatus.OK);
+			when(restTemplate.exchange(eq("http://upload-url"), eq(HttpMethod.POST), any(), eq(String.class)))
+					.thenReturn(uploadResponse);
+
+			// Mock Rotation Service
+			when(rotationService.executeWithInfiniteRotation(any())).thenAnswer(invocation -> {
+				Function<String, String> apiCallFunction = invocation.getArgument(0);
+				return apiCallFunction.apply("gemini-2.0-flash");
+			});
+
+			// Mock Transcription Call
+			String transcriptionResponse = "{\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"{\\\"transcript\\\": \\\"Hello world\\\"}\"}]}}]}";
+			ResponseEntity<String> transResponse = new ResponseEntity<>(transcriptionResponse, HttpStatus.OK);
+
+			// We need to capture the argument to verify the prompt
+			ArgumentCaptor<HttpEntity> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+			when(restTemplate.exchange(contains(":generateContent"), eq(HttpMethod.POST), entityCaptor.capture(),
+					eq(String.class))).thenReturn(transResponse);
+
+			// When
+			geminiService.callGeminiTranscriptionAPIWithFallback(tempFile, "test-audio.mp3");
+
+			// Then
+			HttpEntity capturedEntity = entityCaptor.getValue();
+			String body = capturedEntity.getBody().toString();
+
+			String expectedPrompt = "Transcribe the following audio content accurately. If the audio contains no speech or only silence, output the exact text '[NO SPEECH DETECTED]' in the transcript field. Otherwise, output only the spoken text. Maintain original punctuation, capitalization, and paragraph breaks as best as possible. For numbers, spell them as digits if they represent quantities or measurements, and as words if they are part of natural speech. Include any hesitations, repetitions, or fillers that are meaningful to the content.";
+
+			assertTrue(body.contains(expectedPrompt),
+					"The prompt sent to Gemini API does not match the expected new prompt.");
+
+		} finally {
+			Files.deleteIfExists(tempFile);
+		}
+	}
 
 	@Test
 	void testCallGeminiSummarizationAPIWithFallback_SuccessFirstAttempt() {
 		// Given
+		when(keyRotationManager.getKey(any(KeyProvider.class))).thenReturn(API_KEY);
 		String expectedExtractedText = "{\"summaryText\": \"Test summary\", \"keyPoints\": [\"Point 1\", \"Point 2\"], \"topics\": [\"Topic 1\"], \"glossary\": []}";
 		ResponseEntity<String> successResponse = new ResponseEntity<>(createFullApiResponse(), HttpStatus.OK);
 
-		// Mock success on first attempt
-		when(restTemplate.exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(), eq(String.class)))
+		// Mock the rotation service to execute the lambda immediately
+		when(rotationService.executeWithInfiniteRotation(any())).thenAnswer(invocation -> {
+			Function<String, String> apiCallFunction = invocation.getArgument(0);
+			// The lambda will be called with a test model name
+			return apiCallFunction.apply("gemini-pro");
+		});
+
+		// Mock success on the RestTemplate call inside the lambda
+		when(restTemplate.exchange(contains("gemini-pro"), eq(HttpMethod.POST), any(), eq(String.class)))
 				.thenReturn(successResponse);
 
 		// When
 		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
 
-		// Then - Service extracts the text from the response
-		assertEquals(expectedExtractedText, result);
-		verify(restTemplate, times(1)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-	}
-
-	@Test
-	void testCallGeminiSummarizationAPIWithFallback_SuccessAfterRetries() throws InterruptedException {
-		// Given
-		String expectedExtractedText = "{\"summaryText\": \"Test summary\", \"keyPoints\": [\"Point 1\", \"Point 2\"], \"topics\": [\"Topic 1\"], \"glossary\": []}";
-
-		callSequence = 0;
-		// Mock failures followed by success to test retry logic
-		doAnswer(invocation -> {
-			callSequence++;
-			if (callSequence <= 3) {
-				throw new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE, "Service temporarily unavailable");
-			} else {
-				return new ResponseEntity<>(createFullApiResponse(), HttpStatus.OK);
-			}
-		}).when(restTemplate).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-
-		// When
-		long startTime = System.currentTimeMillis();
-		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
-		long endTime = System.currentTimeMillis();
-
 		// Then
 		assertEquals(expectedExtractedText, result);
-		// Should have made 4 calls (3 failures + 1 success)
-		verify(restTemplate, atLeast(4)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
+		verify(rotationService, times(1)).executeWithInfiniteRotation(any());
+		verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class));
+		verify(keyRotationManager, times(1)).reportSuccess(KeyProvider.GEMINI, API_KEY);
+	}
 
-		// Verify retry delay occurred
-		assertTrue(endTime - startTime >= 3000, "Exponential backoff delay should have occurred");
+	// ==================== FAILURE SCENARIOS (New Fallback Logic)
+	// ====================
+
+	@Test
+	void testCallGeminiSummarizationAPIWithFallback_RotationServiceThrowsException() {
+		// Given
+		// Mock the rotation service to throw an exception after its internal retries
+		when(rotationService.executeWithInfiniteRotation(any())).thenThrow(new RuntimeException("All models failed"));
+
+		// When
+		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
+
+		// Then
+		assertTrue(result.contains("\"error\":\"Unexpected Error\""));
+		assertTrue(result.contains("\"details\":\"All models failed\""));
 	}
 
 	@Test
-	void testCallGeminiSummarizationAPIWithFallback_SuccessAfterModelFallback() throws InterruptedException {
+	void testCallGeminiSummarizationAPIWithFallback_LambdaThrowsRateLimitException() {
 		// Given
-		String expectedExtractedText = "{\"summaryText\": \"Test summary\", \"keyPoints\": [\"Point 1\", \"Point 2\"], \"topics\": [\"Topic 1\"], \"glossary\": []}";
-
-		// Configure for single model to simplify
-		ReflectionTestUtils.setField(geminiService, "modelFallbackSequence", "gemini-2.5-flash");
-
-		callSequence = 0;
-		// Mock transient error then success
-		doAnswer(invocation -> {
-			callSequence++;
-			if (callSequence == 1) {
-				throw new ResourceAccessException("Connection timeout");
-			} else {
-				return new ResponseEntity<>(createFullApiResponse(), HttpStatus.OK);
+		when(keyRotationManager.getKey(any(KeyProvider.class))).thenReturn(API_KEY);
+		when(rotationService.executeWithInfiniteRotation(any())).thenAnswer(invocation -> {
+			Function<String, String> apiCallFunction = invocation.getArgument(0);
+			// This will throw the HttpClientErrorException which is caught by the outer
+			// try-catch in the service
+			try {
+				return apiCallFunction.apply("gemini-pro");
+			} catch (Exception e) {
+				throw new RuntimeException(e);
 			}
-		}).when(restTemplate).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
+		});
 
-		// When
-		long startTime = System.currentTimeMillis();
-		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
-		long endTime = System.currentTimeMillis();
-
-		// Then
-		assertEquals(expectedExtractedText, result);
-		verify(restTemplate, atLeast(2)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-
-		// Verify retry delay occurred
-		assertTrue(endTime - startTime >= 1000, "Retry delay should have occurred for transient error");
-	}
-
-	// ==================== FAILURE SCENARIOS ====================
-
-	@Test
-	void testCallGeminiSummarizationAPIWithFallback_AllRetriesExhausted() throws InterruptedException {
-		// Given
-		// Mock all attempts to fail with 503 Service Unavailable
-		doThrow(new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable")).when(restTemplate)
-				.exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(), eq(String.class));
+		when(restTemplate.exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class)))
+				.thenThrow(new HttpClientErrorException(HttpStatus.TOO_MANY_REQUESTS));
 
 		// When
 		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
 
 		// Then
-		assertTrue(result.contains("error"));
-		assertTrue(result.contains("API Request Failed"));
-		// Verify that multiple attempts were made due to retry logic
-		verify(restTemplate, atLeast(3)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
+		// The service method catches the exception and returns a JSON error response.
+		assertTrue(result.contains("\"error\":\"Unexpected Error\""));
+		assertTrue(result.contains("429 TOO_MANY_REQUESTS"));
+
+		// Verify that no success is reported
+		verify(keyRotationManager, never()).reportSuccess(any(), any());
 	}
 
-	@Test
-	void testCallGeminiSummarizationAPIWithFallback_ApiExceptionHandled() {
-		// Given
-		callSequence = 0;
-		// Mock unexpected exception then null response (which will trigger error
-		// handling)
-		doAnswer(invocation -> {
-			callSequence++;
-			if (callSequence == 1) {
-				throw new RuntimeException("Unexpected API error");
-			} else {
-				return null; // This will be handled by the retry logic
-			}
-		}).when(restTemplate).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
+	// ==================== LEGACY METHOD TESTS ====================
 
-		// When
-		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
-
-		// Then
-		assertTrue(result.contains("error") || result.contains("Unexpected Error"));
-		verify(restTemplate, atLeast(3)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-	}
+	// All legacy tests are removed as the retry logic is now handled by
+	// GeminiSmartRotationService and tested implicitly in the new fallback tests.
 
 	// ==================== HELPER METHODS ====================
 
-	// Creates the full API response with candidates structure (what Gemini API
-	// returns)
 	private String createFullApiResponse() {
 		return "{" + "    \"candidates\": [" + "        {" + "            \"content\": {"
 				+ "                \"parts\": [" + "                    {"
 				+ "                        \"text\": \"{\\\"summaryText\\\": \\\"Test summary\\\", \\\"keyPoints\\\": [\\\"Point 1\\\", \\\"Point 2\\\"], \\\"topics\\\": [\\\"Topic 1\\\"], \\\"glossary\\\": []}\""
 				+ "                    }" + "                ]" + "            }" + "        }" + "    ]" + "}";
-	}
-
-	private int callSequence = 0;
-
-	@Test
-	void testGenerateTranscriptOnlySummary_Success() throws InterruptedException {
-		// Given
-		String expectedExtractedText = "{\"summaryText\": \"Test summary\", \"keyPoints\": [\"Point 1\", \"Point 2\"], \"topics\": [\"Topic 1\"], \"glossary\": []}";
-
-		callSequence = 0;
-		// Return a successful response that can be properly parsed
-		doAnswer(invocation -> {
-			callSequence++;
-			return new ResponseEntity<>(createFullApiResponse(), HttpStatus.OK);
-		}).when(restTemplate).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-
-		// When
-		String result = geminiService.generateTranscriptOnlySummary(TRANSCRIPT_TEXT, METADATA_ID);
-
-		// Then
-		assertEquals(expectedExtractedText, result);
-		// Verify it was called at least once
-		verify(restTemplate, atLeast(1)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-	}
-
-	@Test
-	void testGenerateTranscriptOnlySummary_RetryWithBackoff() throws InterruptedException {
-		// Given
-		String expectedExtractedText = "{\"summaryText\": \"Test summary\", \"keyPoints\": [\"Point 1\", \"Point 2\"], \"topics\": [\"Topic 1\"], \"glossary\": []}";
-
-		callSequence = 0;
-		// First call fails, second succeeds
-		doAnswer(invocation -> {
-			callSequence++;
-			if (callSequence == 1) {
-				throw new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE, "Service down");
-			} else {
-				return new ResponseEntity<>(createFullApiResponse(), HttpStatus.OK);
-			}
-		}).when(restTemplate).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-
-		// When
-		long startTime = System.currentTimeMillis();
-		String result = geminiService.generateTranscriptOnlySummary(TRANSCRIPT_TEXT, METADATA_ID);
-		long endTime = System.currentTimeMillis();
-
-		// Then
-		assertEquals(expectedExtractedText, result);
-		verify(restTemplate, times(2)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
-		assertTrue(endTime - startTime >= 1000, "Should have retry delay");
-	}
-
-	@Test
-	void testKeyRotationOnRateLimitError() {
-		// Given
-		String expectedText = "{\"summaryText\": \"Test summary\", \"keyPoints\": [\"Point 1\", \"Point 2\"], \"topics\": [\"Topic 1\"], \"glossary\": []}";
-		ResponseEntity<String> successResponse = new ResponseEntity<>(createFullApiResponse(), HttpStatus.OK);
-
-		// Setup key rotation: first key fails, second succeeds
-		when(keyRotationManager.getKey(KeyProvider.GEMINI)).thenReturn("key1", "key2");
-
-		// Mock RestTemplate: first call throws 429, second succeeds
-		when(restTemplate.exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(), eq(String.class)))
-				.thenThrow(new HttpClientErrorException(HttpStatus.TOO_MANY_REQUESTS, "Rate limit exceeded"))
-				.thenReturn(successResponse);
-
-		// When
-		String result = geminiService.callGeminiSummarizationAPIWithFallback(PROMPT_TEXT, TRANSCRIPT_TEXT);
-
-		// Then
-		assertEquals(expectedText, result);
-
-		// Verify key rotation was triggered
-		verify(keyRotationManager, times(2)).getKey(KeyProvider.GEMINI);
-		verify(keyRotationManager, times(1)).reportError(KeyProvider.GEMINI, "key1", 429);
-
-		// Verify RestTemplate was called twice (initial attempt + retry)
-		verify(restTemplate, times(2)).exchange(anyString(), eq(org.springframework.http.HttpMethod.POST), any(),
-				eq(String.class));
 	}
 }

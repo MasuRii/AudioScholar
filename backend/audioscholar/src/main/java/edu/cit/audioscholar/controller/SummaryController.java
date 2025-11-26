@@ -13,12 +13,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import edu.cit.audioscholar.dto.SummaryDto;
+import edu.cit.audioscholar.dto.UpdateSummaryRequest;
 import edu.cit.audioscholar.model.AudioMetadata;
 import edu.cit.audioscholar.model.ProcessingStatus;
 import edu.cit.audioscholar.model.Recording;
@@ -226,6 +229,60 @@ public class SummaryController {
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to delete summary.");
 		} catch (Exception e) {
 			log.error("Unexpected error processing deleteSummary for {}: {}", summaryId, e.getMessage(), e);
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.");
+		}
+	}
+
+	@PatchMapping("/summaries/{summaryId}")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<?> updateSummary(@PathVariable String summaryId, @RequestBody UpdateSummaryRequest request,
+			Authentication authentication) {
+		String currentUserId = getCurrentUserId(authentication);
+		log.info("User {} requesting update of summary with ID: {}", currentUserId, summaryId);
+
+		try {
+			Summary summary = summaryService.getSummaryById(summaryId);
+			if (summary == null) {
+				log.warn("Summary not found for ID: {}", summaryId);
+				return ResponseEntity.notFound().build();
+			}
+
+			// Verify ownership via Recording
+			authorizeAccessForRecordingInternal(summary.getRecordingId(), currentUserId, "update summary");
+
+			boolean updated = false;
+			if (request.getFormattedSummaryText() != null) {
+				summary.setFormattedSummaryText(request.getFormattedSummaryText());
+				updated = true;
+			}
+			if (request.getKeyPoints() != null) {
+				summary.setKeyPoints(request.getKeyPoints());
+				updated = true;
+			}
+			if (request.getGlossary() != null) {
+				summary.setGlossary(request.getGlossary());
+				updated = true;
+			}
+
+			if (updated) {
+				summaryService.updateSummary(summary);
+				log.info("Successfully updated summary {}", summaryId);
+			}
+
+			return ResponseEntity.ok(SummaryDto.fromModel(summary));
+
+		} catch (AccessDeniedException e) {
+			log.warn("Access denied for user {} trying to update summary {}: {}", currentUserId, summaryId,
+					e.getMessage());
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to update this summary.");
+		} catch (ResponseStatusException e) {
+			throw e;
+		} catch (ExecutionException | InterruptedException e) {
+			log.error("Error updating summary {}: {}", summaryId, e.getMessage(), e);
+			Thread.currentThread().interrupt();
+			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to update summary.");
+		} catch (Exception e) {
+			log.error("Unexpected error processing updateSummary for {}: {}", summaryId, e.getMessage(), e);
 			throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.");
 		}
 	}

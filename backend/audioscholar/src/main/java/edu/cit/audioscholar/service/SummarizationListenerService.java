@@ -382,10 +382,13 @@ public class SummarizationListenerService {
 				throw new RuntimeException("Summarization result is null or blank");
 			}
 
-			// Check for error response from GeminiService (uses "error" and "details" keys)
-			if (summarizationJson.contains("\"error\"") && summarizationJson.contains("\"details\"")) {
+			log.debug("[{}] Attempting to parse summarization result as JSON...", metadataId);
+			JsonNode rootNode = objectMapper.readTree(summarizationJson);
+
+			// Check for error response from GeminiService
+			if (rootNode.has("error")) {
 				// Throw exception to trigger retry
-				throw new RuntimeException("Received error in summarization result: " + summarizationJson);
+				throw new RuntimeException("Received error in summarization result: " + rootNode.toString());
 			}
 
 			Map<String, Object> latestMetadataMap = firebaseService
@@ -404,10 +407,6 @@ public class SummarizationListenerService {
 					return;
 				}
 			}
-
-			log.debug("[{}] Attempting to parse summarization result as JSON...", metadataId);
-
-			JsonNode rootNode = objectMapper.readTree(summarizationJson);
 			String summaryText = null;
 			List<String> keyPoints = new ArrayList<>();
 			List<String> topics = new ArrayList<>();

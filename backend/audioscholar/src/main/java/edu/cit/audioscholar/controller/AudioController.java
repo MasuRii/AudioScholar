@@ -15,15 +15,21 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import edu.cit.audioscholar.dto.UpdateRecordingRequest;
 import edu.cit.audioscholar.model.AudioMetadata;
+import edu.cit.audioscholar.model.Recording;
 import edu.cit.audioscholar.service.AudioProcessingService;
+import edu.cit.audioscholar.service.FirebaseService;
+import edu.cit.audioscholar.service.RecordingService;
 
 @RestController
 @RequestMapping("/api/audio")
@@ -31,6 +37,8 @@ public class AudioController {
 
 	private static final Logger log = LoggerFactory.getLogger(AudioController.class);
 	private final AudioProcessingService audioProcessingService;
+	private final RecordingService recordingService;
+	private final FirebaseService firebaseService;
 
 	private static final Set<String> ALLOWED_AUDIO_TYPES = Set.of("audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav",
 			"audio/aac", "audio/x-aac", "audio/ogg", "audio/flac", "audio/x-flac", "audio/aiff", "audio/x-aiff",
@@ -40,8 +48,11 @@ public class AudioController {
 			"application/vnd.ms-powerpoint");
 	private static final int DEFAULT_PAGE_SIZE = 20;
 
-	public AudioController(AudioProcessingService audioProcessingService) {
+	public AudioController(AudioProcessingService audioProcessingService, RecordingService recordingService,
+			FirebaseService firebaseService) {
 		this.audioProcessingService = audioProcessingService;
+		this.recordingService = recordingService;
+		this.firebaseService = firebaseService;
 	}
 
 	@PostMapping("/upload")
@@ -162,6 +173,70 @@ public class AudioController {
 			log.error("Service reported failure to delete metadata {} by user {} after authorization check.", id,
 					userId);
 			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to delete metadata.");
+		}
+	}
+
+	@PatchMapping("/recordings/{recordingId}")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<?> updateRecording(@PathVariable String recordingId,
+			@RequestBody UpdateRecordingRequest request) {
+		log.info("Received request to PATCH /api/audio/recordings/{}", recordingId);
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		String userId = authentication.getName();
+
+		try {
+			Recording recording = recordingService.getRecordingById(recordingId);
+			if (recording == null) {
+				log.warn("Recording not found for ID: {}", recordingId);
+				return ResponseEntity.notFound().build();
+			}
+
+			if (!userId.equals(recording.getUserId())) {
+				log.warn("User {} attempted to update recording {} owned by user {}", userId, recordingId,
+						recording.getUserId());
+				return ResponseEntity.status(HttpStatus.FORBIDDEN)
+						.body("You do not have permission to update this recording.");
+			}
+
+			boolean updated = false;
+			if (request.getTitle() != null) {
+				recording.setTitle(request.getTitle());
+				updated = true;
+			}
+			if (request.getDescription() != null) {
+				recording.setDescription(request.getDescription());
+				updated = true;
+			}
+
+			if (updated) {
+				recordingService.updateRecording(recording);
+				log.info("Successfully updated recording {}", recordingId);
+
+				// Sync with AudioMetadata
+				AudioMetadata metadata = firebaseService.getAudioMetadataByRecordingId(recordingId);
+				if (metadata != null) {
+					boolean metaUpdated = false;
+					if (request.getTitle() != null) {
+						metadata.setTitle(request.getTitle());
+						metaUpdated = true;
+					}
+					if (request.getDescription() != null) {
+						metadata.setDescription(request.getDescription());
+						metaUpdated = true;
+					}
+					if (metaUpdated) {
+						firebaseService.updateData(firebaseService.getAudioMetadataCollectionName(), metadata.getId(),
+								metadata.toMap());
+						log.info("Synced updates to AudioMetadata {}", metadata.getId());
+					}
+				}
+			}
+
+			return ResponseEntity.ok(recording);
+
+		} catch (Exception e) {
+			log.error("Error updating recording {}: {}", recordingId, e.getMessage(), e);
+			return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to update recording.");
 		}
 	}
 }
