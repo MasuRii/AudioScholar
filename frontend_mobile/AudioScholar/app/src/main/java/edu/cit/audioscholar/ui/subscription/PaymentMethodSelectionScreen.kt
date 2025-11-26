@@ -71,8 +71,7 @@ fun PaymentMethodSelectionScreen(
                 ) {
                     MarkdownText(
                         markdown = legalSheetContent,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
                     )
                 }
                 TextButton(

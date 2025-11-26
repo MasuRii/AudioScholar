@@ -152,8 +152,7 @@ fun SettingsScreen(
                 ) {
                     MarkdownText(
                         markdown = legalSheetContent.value,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
                     )
                 }
                 TextButton(
