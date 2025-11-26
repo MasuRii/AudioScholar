@@ -21,20 +21,5 @@ RUN apk add --no-cache fontconfig ttf-dejavu
 # Copy the built application
 COPY --from=builder /app/target/audioscholar-*.jar app.jar
 
-# Extract layers for faster startup (if supported) or just for structure
-RUN java -Djarmode=tools -jar app.jar extract --layers --launcher
-
-# Optimized ENTRYPOINT for exploded JAR (no -jar flag; use classpath instead)
-# We run from the extracted layers using -cp to point to specific directories
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS \
-  -XX:+UseG1GC \
-  -XX:+UseContainerSupport \
-  -XX:MaxRAMPercentage=75.0 \
-  -XX:ActiveProcessorCount=1 \
-  -Djava.awt.headless=true \
-  -noverify \
-  -XX:TieredStopAtLevel=1 \
-  --enable-native-access=ALL-UNNAMED \
-  --sun-misc-unsafe-memory-access=allow \
-  -cp 'dependencies/*:snapshot-dependencies/*:spring-boot-loader/*:application' \
-  org.springframework.boot.loader.launch.JarLauncher"]
+# Optimized ENTRYPOINT with container-aware JVM flags
+ENTRYPOINT ["sh", "-c", "java -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC -XX:ActiveProcessorCount=1 $JAVA_OPTS -Djava.awt.headless=true -jar app.jar"]
