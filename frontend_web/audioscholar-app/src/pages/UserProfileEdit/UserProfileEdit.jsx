@@ -132,6 +132,7 @@ const UserProfileEdit = () => {
       try {
         console.log('Attempting to update profile details (name only)...');
         const updatePayload = { firstName, lastName };
+
         await axios.put(`${API_BASE_URL}api/users/me`, updatePayload, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -139,6 +140,8 @@ const UserProfileEdit = () => {
         setInitialFirstName(firstName);
         setInitialLastName(lastName);
         console.log('Profile details updated successfully.');
+        window.dispatchEvent(new Event('user-profile-updated'));
+
       } catch (err) {
         console.error('Error updating profile details:', err);
         setError(`Failed to update profile details: ${err.response?.data?.message || err.message}`);
@@ -148,6 +151,7 @@ const UserProfileEdit = () => {
 
     if (!errorsOccurred && avatarFile) {
       try {
+
         console.log('Attempting to upload new avatar...');
         const formData = new FormData();
         formData.append('avatar', avatarFile);
@@ -155,6 +159,7 @@ const UserProfileEdit = () => {
         const response = await axios.post(`${API_BASE_URL}api/users/me/avatar`, formData, {
           headers: {
             'Authorization': `Bearer ${token}`,
+
             'Content-Type': 'multipart/form-data'
           }
         });
@@ -165,6 +170,8 @@ const UserProfileEdit = () => {
         setAvatarPreview(null);
         document.getElementById('avatarInput').value = null;
         console.log('Avatar uploaded successfully:', response.data);
+        window.dispatchEvent(new Event('user-profile-updated'));
+
       } catch (err) {
         console.error('Error uploading avatar:', err);
         setError(`Failed to upload avatar: ${err.response?.data?.message || err.message}`);

@@ -10,16 +10,21 @@ export const Header = () => {
     const { theme, toggleTheme } = useTheme();
     const [user, setUser] = useState(null);
 
-    useEffect(() => {
+    const loadUser = React.useCallback(() => {
         const token = localStorage.getItem('AuthToken');
         setIsAuthenticated(!!token);
 
-        if (token) {
-            fetch(`${API_BASE_URL}api/users/me`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            })
+        if (!token) {
+            setUser(null);
+            return;
+        }
+
+        fetch(`${API_BASE_URL}api/users/me`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            cache: 'no-store'
+        })
             .then(res => {
                 if (!res.ok) throw new Error('Failed to fetch user');
                 return res.json();
@@ -30,8 +35,22 @@ export const Header = () => {
             .catch(err => {
                 console.error("Failed to fetch user info for header:", err);
             });
-        }
     }, []);
+
+    useEffect(() => {
+        loadUser();
+    }, [loadUser]);
+
+    useEffect(() => {
+        const handleProfileUpdated = () => {
+            loadUser();
+        };
+
+        window.addEventListener('user-profile-updated', handleProfileUpdated);
+        return () => {
+            window.removeEventListener('user-profile-updated', handleProfileUpdated);
+        };
+    }, [loadUser]);
 
     const handleLogout = async () => {
         const token = localStorage.getItem('AuthToken'); // Get token before clearing
@@ -85,8 +104,11 @@ export const Header = () => {
                 </Link>
                 <nav className="hidden md:flex items-center space-x-2">
                     <button
-                        onClick={toggleTheme}
-                        className="p-2 rounded-full text-white hover:bg-white/10 transition-colors mr-2 focus:outline-none"
+                        onClick={() => {
+                            console.log('Header: Toggle button clicked');
+                            toggleTheme();
+                        }}
+                        className="p-2 rounded-full text-white hover:bg-white/10 transition-colors mr-2 focus:outline-none cursor-pointer"
                         aria-label="Toggle Dark Mode"
                     >
                         {theme === 'light' ? <FiMoon className="w-5 h-5" /> : <FiSun className="w-5 h-5" />}
@@ -103,17 +125,13 @@ export const Header = () => {
                                 <FiUpload className="w-4 h-4" /> Upload
                             </Link>
                             <Link to="/profile" className="flex items-center gap-1.5 font-inter font-medium text-sm leading-5 tracking-tight text-white hover:text-indigo-600 hover:bg-white transition-all duration-200 px-3 py-1.5 rounded-md">
-                                {user && user.profileImageUrl ? (
-                                    <img 
-                                        src={user.profileImageUrl} 
-                                        alt="Profile" 
-                                        className="w-5 h-5 rounded-full object-cover border border-gray-300"
-                                        referrerPolicy="no-referrer"
-                                        onError={(e) => { e.target.onerror = null; e.target.src = '/icon-512.png'; }}
-                                    />
-                                ) : (
-                                    <FiUser className="w-4 h-4" />
-                                )}
+                                <img 
+                                    src={user?.profileImageUrl || '/icon-512.png'} 
+                                    alt="Profile" 
+                                    className="w-5 h-5 rounded-full object-cover border border-gray-300 bg-white"
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => { e.target.onerror = null; e.target.src = '/icon-512.png'; }}
+                                />
                                 <span>{user?.firstName || 'Profile'}</span>
                             </Link>
                             <button
@@ -146,12 +164,12 @@ export const Header = () => {
 
 const HeroSection = () => {
     return (
-        <section className="py-20 bg-gradient-to-r from-blue-50 to-teal-50 animate-fade-in-up">
+        <section className="py-20 bg-gradient-to-r from-blue-50 to-teal-50 dark:from-gray-900 dark:to-gray-800 animate-fade-in-up">
             <div className="container mx-auto px-4 text-center">
-                <h1 className="font-montserrat font-bold text-4xl md:text-5xl leading-tight tracking-normal text-gray-800 mb-4">
-                    Stop Taking Notes, Start <span className="text-[#1A365D]">Actively Listening</span>.
+                <h1 className="font-montserrat font-bold text-4xl md:text-5xl leading-tight tracking-normal text-gray-900 dark:text-gray-50 mb-4">
+                    Stop Taking Notes, Start <span className="text-[#1A365D] dark:text-teal-300">Actively Listening</span>.
                 </h1>
-                <p className="font-montserrat font-semibold text-lg md:text-xl leading-relaxed tracking-normal text-gray-600 max-w-3xl mx-auto mb-8">
+                <p className="font-montserrat font-semibold text-lg md:text-xl leading-relaxed tracking-normal text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-8">
                     Traditional note-taking is inefficient. AudioScholar records lectures and uses AI to generate smart summaries,
                     so you can focus on understanding in class and get organized study materials automatically.
                 </p>
@@ -198,19 +216,19 @@ const Features = () => {
     ];
 
     return (
-        <section className="py-16 bg-teal-50">
+        <section className="py-16 bg-teal-50 dark:bg-gray-900">
             <div className="container mx-auto px-4">
-                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-[#1A365D] mb-12 animate-fade-in-up">How AudioScholar Makes Learning Efficient</h2>
+                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-[#1A365D] dark:text-teal-300 mb-12 animate-fade-in-up">How AudioScholar Makes Learning Efficient</h2>
                 <div className="grid md:grid-cols-3 gap-8">
                     {features.map((feature, index) => (
-                        <div key={index} className="bg-white p-6 rounded-lg border border-gray-200 hover:shadow-lg transition-shadow transform hover:scale-105 animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
+                        <div key={index} className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow transform hover:scale-105 animate-fade-in-up" style={{ animationDelay: `${index * 100}ms` }}>
                             <div className="flex items-center mb-4">
                                 <div className="w-12 h-12 bg-teal-100 rounded-full flex items-center justify-center mr-4">
                                     {feature.icon}
                                 </div>
-                                <h3 className="font-inter font-semibold text-lg leading-6 tracking-tight text-teal-700">{feature.title}</h3>
+                                <h3 className="font-inter font-semibold text-lg leading-6 tracking-tight text-teal-700 dark:text-teal-300">{feature.title}</h3>
                             </div>
-                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-600">
+                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-600 dark:text-gray-300">
                                 {feature.description}
                             </p>
                         </div>
@@ -266,15 +284,15 @@ const Testimonials = () => {
     }, [nextSlide]);
 
     return (
-        <section className="py-16 bg-white relative">
+        <section className="py-16 bg-white dark:bg-gray-900 relative">
             <div className="container mx-auto px-4 max-w-4xl">
-                <h2 className="font-montserrat font-semibold text-[28px] leading-[36px] tracking-normal text-center text-gray-800 mb-12">Focus More, Study Smarter</h2>
+                <h2 className="font-montserrat font-semibold text-[28px] leading-[36px] tracking-normal text-center text-gray-800 dark:text-gray-100 mb-12">Focus More, Study Smarter</h2>
                 
-                <div className="relative bg-gray-50 p-8 rounded-xl border border-gray-200 shadow-sm min-h-[280px] flex flex-col justify-center items-center text-center transition-all duration-500 ease-in-out">
+                <div className="relative bg-gray-50 dark:bg-gray-800 p-8 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm min-h-[280px] flex flex-col justify-center items-center text-center transition-all duration-500 ease-in-out">
                      {/* Chevron Left - Desktop */}
                     <button 
                         onClick={prevSlide}
-                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white p-2 rounded-full shadow-md hover:bg-gray-100 focus:outline-none z-10 hidden md:block text-teal-600 transition-colors"
+                        className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-700 p-2 rounded-full shadow-md hover:bg-gray-100 dark:hover:bg-gray-600 focus:outline-none z-10 hidden md:block text-teal-600 dark:text-teal-400 transition-colors"
                         aria-label="Previous testimonial"
                     >
                          <FiChevronLeft className="w-6 h-6" />
@@ -287,19 +305,19 @@ const Testimonials = () => {
                                 <span key={i}>★</span>
                             ))}
                         </div>
-                        <p className="font-inter font-normal text-lg leading-relaxed tracking-wide italic text-gray-700 mb-6">"{testimonials[currentIndex].quote}"</p>
+                        <p className="font-inter font-normal text-lg leading-relaxed tracking-wide italic text-gray-700 dark:text-gray-300 mb-6">"{testimonials[currentIndex].quote}"</p>
                         <div>
-                            <p className="text-gray-800 font-inter font-semibold text-base leading-6 tracking-tight">
+                            <p className="text-gray-800 dark:text-gray-100 font-inter font-semibold text-base leading-6 tracking-tight">
                                 {testimonials[currentIndex].author}
                             </p>
-                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-500">{testimonials[currentIndex].role}</p>
+                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-500 dark:text-gray-400">{testimonials[currentIndex].role}</p>
                         </div>
                     </div>
 
                      {/* Chevron Right - Desktop */}
                     <button 
                         onClick={nextSlide}
-                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white p-2 rounded-full shadow-md hover:bg-gray-100 focus:outline-none z-10 hidden md:block text-teal-600 transition-colors"
+                        className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white dark:bg-gray-700 p-2 rounded-full shadow-md hover:bg-gray-100 dark:hover:bg-gray-600 focus:outline-none z-10 hidden md:block text-teal-600 dark:text-teal-400 transition-colors"
                         aria-label="Next testimonial"
                     >
                          <FiChevronRight className="w-6 h-6" />
@@ -308,18 +326,18 @@ const Testimonials = () => {
 
                 {/* Dots Indicator & Mobile Controls */}
                 <div className="flex justify-center items-center mt-8 gap-4">
-                     <button onClick={prevSlide} className="md:hidden bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200 transition-colors"><FiChevronLeft /></button>
+                     <button onClick={prevSlide} className="md:hidden bg-gray-100 dark:bg-gray-700 p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"><FiChevronLeft /></button>
                     <div className="flex space-x-2">
                         {testimonials.map((_, index) => (
                             <button
                                 key={index}
                                 onClick={() => setCurrentIndex(index)}
-                                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${index === currentIndex ? 'bg-teal-600 w-4' : 'bg-gray-300 hover:bg-gray-400'}`}
+                                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${index === currentIndex ? 'bg-teal-600 w-4' : 'bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500'}`}
                                 aria-label={`Go to testimonial ${index + 1}`}
                             />
                         ))}
                     </div>
-                     <button onClick={nextSlide} className="md:hidden bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200 transition-colors"><FiChevronRight /></button>
+                     <button onClick={nextSlide} className="md:hidden bg-gray-100 dark:bg-gray-700 p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"><FiChevronRight /></button>
                 </div>
             </div>
         </section>
@@ -359,7 +377,7 @@ const Pricing = () => {
     ];
 
     return (
-        <section className="py-16 bg-[#1A365D]">
+        <section id="pricing" className="py-16 bg-[#1A365D]">
             <div className="container mx-auto px-4">
                 <h2 className="font-montserrat font-semibold text-[28px] leading-[36px] tracking-normal text-center text-white mb-4">Choose Your Plan</h2>
                 <p className="font-inter font-normal text-lg leading-5 tracking-normal text-center text-teal-200 mb-12">Start learning efficiently today.</p>
@@ -408,24 +426,24 @@ const TeamSection = () => {
     ];
 
     return (
-        <section className="py-16 bg-white"> {/* Or choose another background e.g., bg-gray-100 */}
+        <section className="py-16 bg-white dark:bg-gray-900"> {/* Or choose another background e.g., bg-gray-100 */}
             <div className="container mx-auto px-4">
-                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-gray-800 mb-12">Meet the Team</h2>
+                <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-gray-800 dark:text-gray-100 mb-12">Meet the Team</h2>
                 <div className="flex flex-wrap justify-center gap-8 max-w-6xl mx-auto">
                     {teamMembers.map((member, index) => (
                         <Link 
                             to="/about" 
                             key={index} 
-                            className="block w-full sm:w-72 bg-gray-50 p-6 rounded-lg border border-gray-200 shadow-sm text-center hover:shadow-lg hover:scale-105 transition-all duration-300 ease-in-out"
+                            className="block w-full sm:w-72 bg-gray-50 dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm text-center hover:shadow-lg hover:scale-105 transition-all duration-300 ease-in-out"
                         >
                             {/* Use img tag with provided source */}
                              <img 
                                 src={member.imgSrc} 
                                 alt={member.name} 
-                                className="w-24 h-24 rounded-full mx-auto mb-4 object-cover border-2 border-gray-200" // Added object-cover and border
+                                className="w-24 h-24 rounded-full mx-auto mb-4 object-cover border-2 border-gray-200 dark:border-gray-600" // Added object-cover and border
                              />
-                            <h3 className="font-inter font-semibold text-lg leading-6 tracking-tight text-gray-800 mb-1">{member.name}</h3>
-                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-teal-600">{member.role}</p>
+                            <h3 className="font-inter font-semibold text-lg leading-6 tracking-tight text-gray-800 dark:text-gray-100 mb-1">{member.name}</h3>
+                            <p className="font-inter font-normal text-sm leading-5 tracking-normal text-teal-600 dark:text-teal-400">{member.role}</p>
                         </Link>
                     ))}
                 </div>
@@ -440,10 +458,10 @@ export const Footer = () => {
             <div className="container mx-auto px-4">
                 <div className="grid md:grid-cols-4 gap-8">
                     <div>
-                        <div className="flex items-center gap-3 mb-4">
+                        <Link to="/" className="flex items-center gap-3 mb-4">
                             <img src="/AudioScholar - No BG.png" alt="AudioScholar Logo" className="h-14 w-auto" />
                             <span className="font-montserrat font-semibold font-bold text-[22px] leading-7 tracking-normal text-primary-400">AudioScholar</span>
-                        </div>
+                        </Link>
                         <p className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-400 mb-4">Transform your lecture experience with AI-powered notes.</p>
                         <div className="flex space-x-4">
                             {/* Add social links if available */}
@@ -462,7 +480,7 @@ export const Footer = () => {
                     <div>
                         <h3 className="font-inter font-semibold text-base leading-6 tracking-tight text-white mb-4">Company</h3>
                         <ul className="space-y-2">
-                             {/* Add Blog/Careers links if applicable */}
+                             <li><Link to="/about" className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-400 hover:text-primary-400 transition-colors">About AudioScholar</Link></li>
                         </ul>
                     </div>
 
@@ -470,8 +488,8 @@ export const Footer = () => {
                         <h3 className="font-inter font-semibold text-base leading-6 tracking-tight text-white mb-4">Legal</h3>
                         <ul className="space-y-2">
                              {/* Add Privacy/Terms/Contact links */}
-                            <li><a href="#" className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-400 hover:text-primary-400 transition-colors">Privacy Policy</a></li>
-                            <li><a href="#" className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-400 hover:text-primary-400 transition-colors">Terms of Service</a></li>
+                            <li><Link to="/privacy" className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-400 hover:text-primary-400 transition-colors">Privacy Policy</Link></li>
+                            <li><Link to="/terms" className="font-inter font-normal text-sm leading-5 tracking-normal text-gray-400 hover:text-primary-400 transition-colors">Terms of Service</Link></li>
                         </ul>
                     </div>
                 </div>

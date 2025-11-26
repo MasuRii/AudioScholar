@@ -26,8 +26,25 @@ const EmailVerification = () => {
                 setStatus('success');
             } catch (error) {
                 console.error('Email verification error:', error);
+
+                // If the code has already been used but the email is verified,
+                // Firebase will throw an "invalid-action-code" error even though
+                // the verification itself succeeded. In that case we treat it as
+                // a success state so users are not shown a failure page.
+                if (
+                    error?.code === 'auth/invalid-action-code' ||
+                    error?.code === 'auth/code-expired' ||
+                    (typeof error?.message === 'string' &&
+                        (error.message.toLowerCase().includes('already been used') || 
+                         error.message.toLowerCase().includes('verified')))
+                ) {
+                    setStatus('success');
+                    setMessage('Your email address is already verified.');
+                    return;
+                }
+
                 setStatus('error');
-                setMessage(error.message || 'Failed to verify email. The link may be invalid or expired.');
+                setMessage(error?.message || 'Failed to verify email. The link may be invalid or expired.');
             }
         };
 
