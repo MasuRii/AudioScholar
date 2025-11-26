@@ -32,4 +32,4 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /app/target/audioscholar-*.jar app.jar
 
 # Run the application
-ENTRYPOINT ["java", "-Djava.awt.headless=true", "-Xmx256m", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "java -XX:+UseSerialGC -XX:ActiveProcessorCount=1 $JAVA_OPTS -Djava.awt.headless=true -jar app.jar"]
