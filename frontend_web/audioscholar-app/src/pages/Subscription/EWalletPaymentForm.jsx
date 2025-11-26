@@ -46,9 +46,9 @@ const EWalletPaymentForm = ({ onSubmit }) => {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">Mobile Number (GCash/PayMaya)</label>
+                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Mobile Number (GCash/PayMaya)</label>
                 <div className="mt-1 flex rounded-md shadow-sm">
-                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
+                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-300 sm:text-sm transition-colors duration-200">
                         {countryCode}
                     </span>
                     <input
@@ -59,12 +59,12 @@ const EWalletPaymentForm = ({ onSubmit }) => {
                         onChange={handleChange}
                         placeholder="9XXXXXXXXX"
                         maxLength="10"
-                        className={`flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border ${error ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                        className={`flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-r-md border ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm transition-colors duration-200`}
                         required
                     />
                 </div>
-                {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
-                 <p className="mt-1 text-xs text-gray-500">Enter your 10-digit number (e.g., 9171234567).</p>
+                {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
+                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Enter your 10-digit number (e.g., 9171234567).</p>
             </div>
 
             <button 

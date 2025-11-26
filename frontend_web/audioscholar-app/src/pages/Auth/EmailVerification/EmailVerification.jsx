@@ -1,5 +1,5 @@
-import { applyActionCode, getAuth } from 'firebase/auth';
-import React, { useEffect, useState } from 'react';
+import { applyActionCode, getAuth, onAuthStateChanged } from 'firebase/auth';
+import React, { useEffect, useRef, useState } from 'react';
 import { FiAlertCircle, FiCheckCircle, FiLoader } from 'react-icons/fi';
 import { Link, useSearchParams } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
@@ -10,45 +10,105 @@ const EmailVerification = () => {
     const [status, setStatus] = useState('verifying'); // verifying, success, error
     const [message, setMessage] = useState('');
     const auth = getAuth(firebaseApp);
+    const verificationAttempted = useRef(false);
 
     useEffect(() => {
-        const verifyEmail = async () => {
+        let isMounted = true;
+
+        const verifyEmail = async (currentUser) => {
             const oobCode = searchParams.get('oobCode');
             
+            // If no code is present in the URL, we can't verify anything using applyActionCode.
+            // However, we should check if the user is ALREADY verified in the background.
             if (!oobCode) {
-                setStatus('error');
-                setMessage('Invalid verification link. No code found.');
+                if (currentUser?.emailVerified) {
+                     if (isMounted) {
+                        setStatus('success');
+                        setMessage('Your email address is verified.');
+                     }
+                     return;
+                }
+                
+                if (isMounted) {
+                    setStatus('error');
+                    setMessage('Verification link is invalid or missing the required code.');
+                }
                 return;
             }
 
+            // Prevent re-running applyActionCode if we've already started/finished it in this mount
+            if (verificationAttempted.current) return;
+            verificationAttempted.current = true;
+
             try {
                 await applyActionCode(auth, oobCode);
-                setStatus('success');
+                // Success!
+                if (isMounted) {
+                    setStatus('success');
+                    setMessage('Your email address has been successfully verified.');
+                }
             } catch (error) {
                 console.error('Email verification error:', error);
 
-                // If the code has already been used but the email is verified,
-                // Firebase will throw an "invalid-action-code" error even though
-                // the verification itself succeeded. In that case we treat it as
-                // a success state so users are not shown a failure page.
+                // If applyActionCode fails, it might be because the code was already used.
+                // In this case, we MUST check the actual user status.
+                // We reload the user to get the freshest token/claims.
+                let isVerified = false;
+                if (currentUser) {
+                    try {
+                        await currentUser.reload();
+                        isVerified = currentUser.emailVerified;
+                    } catch (reloadError) {
+                        console.warn('Failed to reload user to check verification status:', reloadError);
+                        // If we can't reload, we can't be sure, so we might fall back to error
+                        // UNLESS the error code strongly suggests success (invalid-action-code often means used).
+                    }
+                }
+
+                // If the user IS verified, override the error and show success.
+                if (isVerified) {
+                    if (isMounted) {
+                        setStatus('success');
+                        setMessage('Your email address is verified.');
+                    }
+                    return;
+                }
+
+                // If we aren't verified, but the error code suggests the link was used/expired
+                // AND we couldn't verify the user status (e.g. not logged in), 
+                // we might still want to show a "likely verified" or specific message, 
+                // but for now, stick to the requested logic: false flags should be success.
+                // "auth/invalid-action-code" usually means the code was used. 
+                // If the user clicked it twice, the second time is "invalid".
                 if (
-                    error?.code === 'auth/invalid-action-code' ||
+                    error?.code === 'auth/invalid-action-code' || 
                     error?.code === 'auth/code-expired' ||
                     (typeof error?.message === 'string' &&
                         (error.message.toLowerCase().includes('already been used') || 
                          error.message.toLowerCase().includes('verified')))
                 ) {
-                    setStatus('success');
-                    setMessage('Your email address is already verified.');
+                    if (isMounted) {
+                        setStatus('success');
+                        setMessage('Your email address is likely already verified.');
+                    }
                     return;
                 }
 
-                setStatus('error');
-                setMessage(error?.message || 'Failed to verify email. The link may be invalid or expired.');
+                if (isMounted) {
+                    setStatus('error');
+                    setMessage(error?.message || 'Failed to verify email. The link may be invalid or expired.');
+                }
             }
         };
 
-        verifyEmail();
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            verifyEmail(user);
+        });
+
+        return () => {
+            isMounted = false;
+            unsubscribe();
+        };
     }, [auth, searchParams]);
 
     return (

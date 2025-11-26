@@ -1,6 +1,6 @@
 import { getAuth, sendEmailVerification, signInWithEmailAndPassword } from 'firebase/auth';
 import React, { useState } from 'react';
-import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiEye, FiEyeOff, FiLoader } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
 import { signUp } from '../../../services/authService';
@@ -262,7 +262,11 @@ const SignUp = () => {
                   className={`w-full bg-teal-500 text-white py-3 px-4 rounded-lg font-medium transition ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-teal-600'}`}
                   disabled={loading}
                 >
-                  {loading ? 'Creating Account...' : 'Create Account'}
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                        <FiLoader className="w-5 h-5 animate-spin" /> Creating Account...
+                    </span>
+                  ) : 'Create Account'}
                 </button>
               </div>
             )}

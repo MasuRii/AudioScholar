@@ -17,6 +17,8 @@ import SubscriptionTierPage from '../../pages/Subscription/SubscriptionTierPage'
 import Uploading from '../../pages/Upload/Uploading';
 import UserProfile from '../../pages/UserProfile/UserProfile';
 import UserProfileEdit from '../../pages/UserProfileEdit/UserProfileEdit';
+import PrivacyPolicy from '../../pages/Legal/PrivacyPolicy';
+import TermsOfService from '../../pages/Legal/TermsOfService';
 import ProtectedRoute from '../common/ProtectedRoute';
 
 
@@ -27,6 +29,8 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

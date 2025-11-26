@@ -21,23 +21,23 @@ const PaymentMethodPage = () => {
     };
 
     return (
-        <div className="min-h-screen flex flex-col bg-gray-100">
+        <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
             <title>AudioScholar - Payment Method</title>
             <Header />
 
             <main className="flex-grow flex items-center justify-center py-12">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="max-w-lg mx-auto bg-white p-8 rounded-lg shadow-xl">
-                        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">Select Payment Method</h1>
+                    <div className="max-w-lg mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl transition-colors duration-200">
+                        <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-6 text-center">Select Payment Method</h1>
 
                         <div className="mb-6">
-                            <div className="flex border border-gray-200 rounded-md overflow-hidden">
+                            <div className="flex border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden">
                                 <button
                                     onClick={() => setPaymentMethod('card')}
                                     className={`flex-1 py-3 px-4 text-sm font-medium focus:outline-none transition-colors duration-200 ${
                                         paymentMethod === 'card' 
                                         ? 'bg-[#2D8A8A] text-white' 
-                                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                        : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
                                     }`}
                                 >
                                     Credit/Debit Card
@@ -47,7 +47,7 @@ const PaymentMethodPage = () => {
                                     className={`flex-1 py-3 px-4 text-sm font-medium focus:outline-none transition-colors duration-200 flex items-center justify-center space-x-2 ${
                                         paymentMethod === 'ewallet' 
                                         ? 'bg-[#2D8A8A] text-white' 
-                                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                                        : 'bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
                                     }`}
                                 >
                                     <span></span>

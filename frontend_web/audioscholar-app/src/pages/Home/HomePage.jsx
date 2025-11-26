@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { FiGrid, FiLogIn, FiLogOut, FiMic, FiUpload, FiUser, FiUserPlus, FiCheckCircle, FiYoutube, FiCloud, FiBriefcase, FiChevronLeft, FiChevronRight, FiSun, FiMoon } from 'react-icons/fi';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -216,7 +216,7 @@ const Features = () => {
     ];
 
     return (
-        <section className="py-16 bg-teal-50 dark:bg-gray-900">
+        <section id="features" className="py-16 bg-teal-50 dark:bg-gray-900">
             <div className="container mx-auto px-4">
                 <h2 className="font-montserrat font-semibold text-3xl leading-[36px] tracking-normal text-center text-[#1A365D] dark:text-teal-300 mb-12 animate-fade-in-up">How AudioScholar Makes Learning Efficient</h2>
                 <div className="grid md:grid-cols-3 gap-8">
@@ -503,6 +503,21 @@ export const Footer = () => {
 };
 
 const HomePage = () => {
+    const location = useLocation();
+
+    useEffect(() => {
+        if (location.hash) {
+            const elem = document.getElementById(location.hash.slice(1));
+            if (elem) {
+                setTimeout(() => {
+                    elem.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+            }
+        } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }, [location]);
+
     return (
         <>
             <Header />

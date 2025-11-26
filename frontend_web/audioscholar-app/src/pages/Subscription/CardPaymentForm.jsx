@@ -78,8 +78,8 @@ const CardPaymentForm = ({ onSubmit }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
                 <div className="flex justify-between items-center mb-1">
-                    <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700">Card Number</label>
-                    <div className="flex space-x-1 text-gray-400">
+                    <label htmlFor="cardNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Card Number</label>
+                    <div className="flex space-x-1 text-gray-400 dark:text-gray-500">
                         <FaCcVisa className="h-5 w-5" />
                         <FaCcMastercard className="h-5 w-5" />
                         <FaCcAmex className="h-5 w-5" />
@@ -87,7 +87,7 @@ const CardPaymentForm = ({ onSubmit }) => {
                 </div>
                 <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FiCreditCard className="h-5 w-5 text-gray-400" />
+                        <FiCreditCard className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                     </div>
                     <input
                         type="text"
@@ -97,19 +97,19 @@ const CardPaymentForm = ({ onSubmit }) => {
                         onChange={handleChange}
                         placeholder="XXXX XXXX XXXX XXXX"
                         maxLength="19"
-                        className={`block w-full pl-10 pr-3 py-2 border ${errors.cardNumber ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                        className={`block w-full pl-10 pr-3 py-2 border ${errors.cardNumber ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] dark:bg-gray-700 dark:text-white sm:text-sm transition-colors duration-200`}
                         required
                     />
                 </div>
-                {errors.cardNumber && <p className="mt-1 text-xs text-red-600">{errors.cardNumber}</p>}
+                {errors.cardNumber && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.cardNumber}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                    <label htmlFor="expiryDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expiry Date</label>
                     <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <FiCalendar className="h-5 w-5 text-gray-400" />
+                            <FiCalendar className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                         </div>
                         <input
                             type="text"
@@ -119,17 +119,17 @@ const CardPaymentForm = ({ onSubmit }) => {
                             onChange={handleChange}
                             placeholder="MM/YY"
                             maxLength="5"
-                            className={`block w-full pl-10 pr-3 py-2 border ${errors.expiryDate ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                            className={`block w-full pl-10 pr-3 py-2 border ${errors.expiryDate ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] dark:bg-gray-700 dark:text-white sm:text-sm transition-colors duration-200`}
                             required
                         />
                     </div>
-                    {errors.expiryDate && <p className="mt-1 text-xs text-red-600">{errors.expiryDate}</p>}
+                    {errors.expiryDate && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.expiryDate}</p>}
                 </div>
                 <div>
-                    <label htmlFor="cvv" className="block text-sm font-medium text-gray-700 mb-1">CVV</label>
+                    <label htmlFor="cvv" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">CVV</label>
                     <div className="relative">
                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <FiLock className="h-5 w-5 text-gray-400" />
+                            <FiLock className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                         </div>
                         <input
                             type="text" // Use text to allow controlling length easily
@@ -139,19 +139,19 @@ const CardPaymentForm = ({ onSubmit }) => {
                             onChange={handleChange}
                             placeholder="123"
                             maxLength="4"
-                            className={`block w-full pl-10 pr-3 py-2 border ${errors.cvv ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                            className={`block w-full pl-10 pr-3 py-2 border ${errors.cvv ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] dark:bg-gray-700 dark:text-white sm:text-sm transition-colors duration-200`}
                             required
                         />
                     </div>
-                    {errors.cvv && <p className="mt-1 text-xs text-red-600">{errors.cvv}</p>}
+                    {errors.cvv && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.cvv}</p>}
                 </div>
             </div>
 
             <div>
-                <label htmlFor="nameOnCard" className="block text-sm font-medium text-gray-700 mb-1">Name on Card</label>
+                <label htmlFor="nameOnCard" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name on Card</label>
                 <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FiUser className="h-5 w-5 text-gray-400" />
+                        <FiUser className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                     </div>
                     <input
                         type="text"
@@ -160,11 +160,11 @@ const CardPaymentForm = ({ onSubmit }) => {
                         value={cardDetails.nameOnCard}
                         onChange={handleChange}
                         placeholder="John Doe"
-                        className={`block w-full pl-10 pr-3 py-2 border ${errors.nameOnCard ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] sm:text-sm`}
+                        className={`block w-full pl-10 pr-3 py-2 border ${errors.nameOnCard ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'} rounded-md shadow-sm focus:outline-none focus:ring-[#2D8A8A] focus:border-[#2D8A8A] dark:bg-gray-700 dark:text-white sm:text-sm transition-colors duration-200`}
                         required
                     />
                 </div>
-                {errors.nameOnCard && <p className="mt-1 text-xs text-red-600">{errors.nameOnCard}</p>}
+                {errors.nameOnCard && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.nameOnCard}</p>}
             </div>
 
             <button 
