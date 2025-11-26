@@ -37,4 +37,4 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS \
   --enable-native-access=ALL-UNNAMED \
   --sun-misc-unsafe-memory-access=allow \
   -cp 'dependencies/*:snapshot-dependencies/*:spring-boot-loader/*:application/*' \
-  org.springframework.boot.loader.JarLauncher"]
+  org.springframework.boot.loader.launch.JarLauncher"]

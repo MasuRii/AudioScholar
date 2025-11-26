@@ -1,12 +1,10 @@
 package edu.cit.audioscholar.service;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -17,22 +15,22 @@ import edu.cit.audioscholar.dto.Monitor;
 public class UptimeRobotService {
 
 	private static final Logger log = LoggerFactory.getLogger(UptimeRobotService.class);
-	private final WebClient.Builder webClientBuilder;
+	// private final WebClient.Builder webClientBuilder;
 
-	@Value("${uptimerobot.api.key:disabled}")
-	private String apiKey;
+	// @Value("${uptimerobot.api.key:disabled}")
+	// private String apiKey;
 
-	@Value("${uptimerobot.api.base-url:disabled}")
-	private String apiBaseUrl;
+	// @Value("${uptimerobot.api.base-url:disabled}")
+	// private String apiBaseUrl;
 
-	private static final String GET_MONITORS_PATH = "/getMonitors";
-	private static final String UPTIME_RATIO_DAYS = "7";
-	private static final Duration API_TIMEOUT = Duration.ofSeconds(60);
-	private static final int MAX_RETRIES = 10;
-	private static final Duration RETRY_DELAY = Duration.ofSeconds(1);
+	// private static final String GET_MONITORS_PATH = "/getMonitors";
+	// private static final String UPTIME_RATIO_DAYS = "7";
+	// private static final Duration API_TIMEOUT = Duration.ofSeconds(60);
+	// private static final int MAX_RETRIES = 10;
+	// private static final Duration RETRY_DELAY = Duration.ofSeconds(1);
 
 	public UptimeRobotService(WebClient.Builder webClientBuilder) {
-		this.webClientBuilder = webClientBuilder;
+		// this.webClientBuilder = webClientBuilder;
 		log.debug("UptimeRobotService constructed. Will use configured apiBaseUrl and apiKey.");
 	}
 
