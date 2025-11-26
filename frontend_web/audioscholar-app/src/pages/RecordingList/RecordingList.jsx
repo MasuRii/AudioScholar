@@ -1,12 +1,26 @@
 import axios from 'axios';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud, FiSearch } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud, FiSearch, FiRefreshCw } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
 import { Header } from '../Home/HomePage';
 
-const TERMINAL_STATUSES = ['COMPLETE', 'COMPLETED', 'FAILED', 'PROCESSING_HALTED_UNSUITABLE_CONTENT', 'PROCESSING_HALTED_NO_SPEECH', 'SUMMARY_FAILED'];
+const TERMINAL_STATUSES = ['COMPLETE', 'COMPLETED', 'FAILED', 'PROCESSING_HALTED_UNSUITABLE_CONTENT', 'PROCESSING_HALTED_NO_SPEECH', 'SUMMARY_FAILED', 'COMPLETED_WITH_WARNINGS'];
 const UPLOADING_STATUSES = ['UPLOAD_PENDING', 'UPLOAD_IN_PROGRESS', 'UPLOADING_TO_STORAGE', 'UPLOADED'];
+const PROCESSING_STATUSES = [
+  'PROCESSING_QUEUED',
+  'TRANSCRIBING',
+  'PDF_CONVERTING',
+  'PDF_CONVERTING_API',
+  'TRANSCRIPTION_COMPLETE',
+  'PDF_CONVERSION_COMPLETE',
+  'SUMMARIZATION_QUEUED',
+  'SUMMARIZING',
+  'SUMMARY_COMPLETE',
+  'RECOMMENDATIONS_QUEUED',
+  'GENERATING_RECOMMENDATIONS',
+  'PROCESSING'
+];
 const UPLOAD_TIMEOUT_SECONDS = 10 * 60;
 
 const RecordingList = () => {
@@ -24,6 +38,8 @@ const RecordingList = () => {
 
     const fetchRecordings = useCallback(async () => {
         console.log("Fetching recordings...");
+        setLoading(true); // Ensure loading state is set when retrying
+        setError(null);
         const token = localStorage.getItem('AuthToken');
         if (!token) {
             setError("User not authenticated. Please log in.");
@@ -46,6 +62,8 @@ const RecordingList = () => {
             );
 
             console.log("Fetched recordings:", sortedRecordings);
+            setRecordings(sortedRecordings);
+            setFilteredRecordings(sortedRecordings);
             return sortedRecordings;
 
         } catch (err) {
@@ -55,9 +73,11 @@ const RecordingList = () => {
                 localStorage.removeItem('AuthToken');
                 navigate('/signin');
             } else {
-                setError('Failed to fetch recordings. Please try again later.');
+                setError('Failed to fetch recordings. Please check your connection and try again.');
             }
             return null;
+        } finally {
+            setLoading(false);
         }
     }, [navigate]);
 
@@ -100,63 +120,63 @@ const RecordingList = () => {
                 return;
             }
             console.log("Polling for updates...");
-            const newData = await fetchRecordings();
-            if (newData && isMountedRef.current) {
-                setRecordings(newData);
-                const stillNeedsPolling = newData.some(rec => {
-                    const statusUpper = rec.status?.toUpperCase();
-                    const isTerminal = TERMINAL_STATUSES.includes(statusUpper);
-                    if (isTerminal) return false;
+            // Silent fetch for polling (don't set global loading)
+            const token = localStorage.getItem('AuthToken');
+            if (!token) return;
 
-                    const isUploading = UPLOADING_STATUSES.includes(statusUpper);
-                    if (isUploading) {
-                        const elapsedSeconds = rec.uploadTimestamp?.seconds
-                            ? (Date.now() / 1000) - rec.uploadTimestamp.seconds
-                            : 0;
-                        if (elapsedSeconds > UPLOAD_TIMEOUT_SECONDS) {
-                            return false;
-                        }
-                    }
-                    return true;
+            try {
+                const response = await axios.get(`${API_BASE_URL}api/audio/metadata`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
+                const validRecordings = response.data.filter(rec => !deletedIdsRef.current.has(rec.id));
+                const sortedRecordings = validRecordings.sort((a, b) =>
+                    (b.uploadTimestamp?.seconds ?? 0) - (a.uploadTimestamp?.seconds ?? 0)
+                );
+                
+                if (isMountedRef.current) {
+                    setRecordings(sortedRecordings);
+                    // Update polling status
+                     const stillNeedsPolling = sortedRecordings.some(rec => {
+                        const statusUpper = rec.status?.toUpperCase();
+                        const isTerminal = TERMINAL_STATUSES.includes(statusUpper);
+                        if (isTerminal) return false;
 
-                if (!stillNeedsPolling) {
-                    console.log("All recordings are in a terminal state or have timed-out uploads. Stopping polling.");
-                    clearInterval(pollIntervalRef.current);
-                    pollIntervalRef.current = null;
-                } else {
-                    console.log("Some recordings still require status checks. Continuing poll.");
+                        const isUploading = UPLOADING_STATUSES.includes(statusUpper);
+                        if (isUploading) {
+                            const elapsedSeconds = rec.uploadTimestamp?.seconds
+                                ? (Date.now() / 1000) - rec.uploadTimestamp.seconds
+                                : 0;
+                            if (elapsedSeconds > UPLOAD_TIMEOUT_SECONDS) return false;
+                        }
+                        return true;
+                    });
+
+                    if (!stillNeedsPolling) {
+                        clearInterval(pollIntervalRef.current);
+                        pollIntervalRef.current = null;
+                    }
                 }
-            } else if (!newData && isMountedRef.current) {
-                console.error("Error fetching data during poll, stopping polling.");
-                clearInterval(pollIntervalRef.current);
-                pollIntervalRef.current = null;
+            } catch (err) {
+                console.error("Error during poll:", err);
             }
         }, 15000);
 
-    }, [fetchRecordings]);
+    }, []);
 
     useEffect(() => {
         isMountedRef.current = true;
-        setLoading(true);
-
+        
         const cachedRecordings = localStorage.getItem('recording_list');
         if (cachedRecordings) {
             const parsed = JSON.parse(cachedRecordings);
             setRecordings(parsed);
-            setFilteredRecordings(parsed); // Initialize filtered
+            setFilteredRecordings(parsed); 
         }
 
         fetchRecordings().then(initialData => {
             if (initialData && isMountedRef.current) {
                 localStorage.setItem('recording_list', JSON.stringify(initialData));
-                setRecordings(initialData);
-                // Filter immediately
-                setFilteredRecordings(initialData);
                 startPolling(initialData);
-            }
-            if (isMountedRef.current) {
-                setLoading(false);
             }
         });
 
@@ -297,6 +317,7 @@ const RecordingList = () => {
         let titleText = '';
 
         const isUploadingOrPending = UPLOADING_STATUSES.includes(statusUpper);
+        const isProcessing = PROCESSING_STATUSES.includes(statusUpper);
         const elapsedSeconds = uploadTimestamp?.seconds
             ? (Date.now() / 1000) - uploadTimestamp.seconds
             : 0;
@@ -310,57 +331,42 @@ const RecordingList = () => {
             isSpinning = false;
             titleText = `Upload received ${Math.round(elapsedSeconds / 60)} mins ago, processing initiated. Status: ${originalStatus}`;
         } else {
-            switch (statusUpper) {
-                case 'COMPLETE':
-                case 'COMPLETED':
+            if (TERMINAL_STATUSES.includes(statusUpper)) {
+                if (statusUpper === 'COMPLETE' || statusUpper === 'COMPLETED') {
                     bgColor = 'bg-green-100';
                     textColor = 'text-green-800';
                     Icon = FiCheckCircle;
                     displayStatus = 'Completed';
-                    break;
-                case 'UPLOAD_PENDING':
-                case 'UPLOAD_IN_PROGRESS':
-                case 'UPLOADING_TO_STORAGE':
-                case 'UPLOADED':
-                    bgColor = 'bg-blue-100';
-                    textColor = 'text-blue-800';
-                    Icon = FiUploadCloud;
-                    displayStatus = 'Uploading';
-                    isSpinning = true;
-                    break;
-                case 'PROCESSING_QUEUED':
-                case 'TRANSCRIBING':
-                case 'PDF_CONVERTING':
-                case 'PDF_CONVERTING_API':
-                case 'TRANSCRIPTION_COMPLETE':
-                case 'PDF_CONVERSION_COMPLETE':
-                case 'SUMMARIZATION_QUEUED':
-                case 'SUMMARIZING':
-                case 'SUMMARY_COMPLETE':
-                case 'RECOMMENDATIONS_QUEUED':
-                case 'GENERATING_RECOMMENDATIONS':
+                } else if (statusUpper === 'COMPLETED_WITH_WARNINGS') {
                     bgColor = 'bg-yellow-100';
                     textColor = 'text-yellow-800';
-                    Icon = FiLoader;
-                    displayStatus = 'Processing';
-                    isSpinning = true;
-                    break;
-                case 'FAILED':
-                case 'PROCESSING_HALTED_NO_SPEECH':
-                case 'PROCESSING_HALTED_UNSUITABLE_CONTENT':
-                case 'SUMMARY_FAILED':
+                    Icon = FiAlertTriangle;
+                    displayStatus = 'Completed w/ Warn';
+                } else {
                     bgColor = 'bg-red-100';
                     textColor = 'text-red-800';
                     Icon = FiAlertTriangle;
                     displayStatus = 'Failed';
-                    break;
-                default:
-                    displayStatus = 'Unknown';
-                    if (statusUpper !== 'UNKNOWN') {
-                        console.warn('[Badge] Unknown recording status received:', originalStatus);
-                    }
-                    break;
+                }
+            } else if (isProcessing) {
+                bgColor = 'bg-yellow-100';
+                textColor = 'text-yellow-800';
+                Icon = FiLoader;
+                displayStatus = 'Processing';
+                isSpinning = true;
+            } else if (isUploadingOrPending) {
+                bgColor = 'bg-blue-100';
+                textColor = 'text-blue-800';
+                Icon = FiUploadCloud;
+                displayStatus = 'Uploading';
+                isSpinning = true;
+            } else {
+                displayStatus = 'Unknown';
+                if (statusUpper !== 'UNKNOWN') {
+                    console.warn('[Badge] Unknown recording status received:', originalStatus);
+                }
             }
+            
             titleText = (displayStatus === 'Failed' && failureReason)
                 ? `${displayStatus}: ${failureReason}`
                 : displayStatus;
@@ -418,6 +424,14 @@ const RecordingList = () => {
 
     const groupedRecordings = groupRecordings(filteredRecordings);
 
+    const handleRetry = () => {
+        fetchRecordings().then(initialData => {
+             if (initialData) {
+                startPolling(initialData);
+             }
+        });
+    };
+
     return (
         <>
             <Header />
@@ -460,9 +474,19 @@ const RecordingList = () => {
                         </div>
                     )}
 
-                    {error && (
-                        <div className="mb-6 bg-red-50 text-red-700 p-4 rounded-lg text-center">
-                            <p>{error}</p>
+                    {error && !loading && (
+                         <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                            <div className="bg-red-100 p-4 rounded-full mb-4">
+                                <FiAlertTriangle className="w-8 h-8 text-red-600" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Failed to fetch recordings</h3>
+                            <p className="text-gray-500 dark:text-gray-400 mb-6 text-center max-w-md">{error}</p>
+                            <button
+                                onClick={handleRetry}
+                                className="flex items-center gap-2 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md font-medium transition-colors"
+                            >
+                                <FiRefreshCw className="w-4 h-4" /> Retry
+                            </button>
                         </div>
                     )}
 

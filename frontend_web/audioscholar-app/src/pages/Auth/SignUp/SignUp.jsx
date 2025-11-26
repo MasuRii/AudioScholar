@@ -1,5 +1,6 @@
 import { getAuth, sendEmailVerification, signInWithEmailAndPassword } from 'firebase/auth';
 import React, { useState } from 'react';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
 import { signUp } from '../../../services/authService';
@@ -10,12 +11,58 @@ const SignUp = () => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const [passwordRules, setPasswordRules] = useState({
+    length: false,
+    upper: false,
+    lower: false,
+    number: false,
+    special: false,
+  });
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState(null);
   const [backendError, setBackendError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const navigate = useNavigate();
   const auth = getAuth(firebaseApp);
+
+  const updatePasswordRules = (value) => {
+    const rules = {
+      length: value.length >= 8,
+      upper: /[A-Z]/.test(value),
+      lower: /[a-z]/.test(value),
+      number: /[0-9]/.test(value),
+      special: /[^A-Za-z0-9]/.test(value),
+    };
+    setPasswordRules(rules);
+    return rules;
+  };
+
+  const handlePasswordChange = (value) => {
+    setPassword(value);
+    if (!passwordTouched) {
+      setPasswordTouched(true);
+    }
+    updatePasswordRules(value);
+  };
+
+  const isPasswordStrong = (rules) =>
+    rules.length && rules.upper && rules.lower && rules.number && rules.special;
+
+  const getPasswordStrength = () => {
+    const score = Object.values(passwordRules).filter(Boolean).length;
+    if (!passwordTouched || !password) {
+      return { label: '', color: 'bg-gray-200', score: 0 };
+    }
+
+    if (score <= 2) return { label: 'Weak password', color: 'bg-red-500', score };
+    if (score === 3 || score === 4)
+      return { label: 'Medium strength password', color: 'bg-yellow-500', score };
+    return { label: 'Strong password', color: 'bg-green-500', score };
+  };
+
+  const passwordStrength = getPasswordStrength();
 
   const handleSignUp = async (e) => {
     e.preventDefault();
@@ -29,11 +76,6 @@ const SignUp = () => {
       return;
     }
 
-    if (password.length < 8) {
-      setFormError('Password must be at least 8 characters long.');
-      return;
-    }
-
     if (!/\S+@\S+\.\S+/.test(email)) {
       setFormError('Please enter a valid email address.');
       return;
@@ -44,6 +86,11 @@ const SignUp = () => {
       return;
     }
 
+    const latestRules = updatePasswordRules(password);
+    if (!isPasswordStrong(latestRules)) {
+      setFormError('Password must be at least 8 characters and include uppercase, lowercase, number, and symbol.');
+      return;
+    }
 
     setLoading(true);
 
@@ -97,23 +144,23 @@ const SignUp = () => {
   return (
     <>
       <Header />
-      <main className="flex-grow py-12">
+      <main className="flex-grow py-12 bg-gray-50 dark:bg-gray-900">
         <title>AudioScholar - Sign Up</title>
-        <div className="container mx-auto px-4">
-          <form onSubmit={handleSignUp} className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Create Account</h1>
-            <p className="text-gray-600 mb-8">Start your journey to better learning</p>
+        <div className="container mx-auto px-4 animate-fade-in-up">
+          <form onSubmit={handleSignUp} className="max-w-md mx-auto bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">Create Account</h1>
+            <p className="text-gray-600 dark:text-gray-300 mb-8">Start your journey to better learning</p>
 
             {successMessage ? (
               <div className="text-green-500 text-sm mt-2 text-center">{successMessage}</div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
                   <input
                     type="text"
                     id="firstName"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                     placeholder="Enter your first name"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
@@ -122,11 +169,11 @@ const SignUp = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
                   <input
                     type="text"
                     id="lastName"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                     placeholder="Enter your last name"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
@@ -135,11 +182,11 @@ const SignUp = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                   <input
                     type="email"
                     id="email"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                     placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -148,16 +195,57 @@ const SignUp = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                  <input
-                    type="password"
-                    id="password"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    placeholder="Create a password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                  <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        id="password"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                        placeholder="Create a password"
+                        value={password}
+                        onChange={(e) => handlePasswordChange(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 focus:outline-none"
+                      >
+                        {showPassword ? <FiEyeOff /> : <FiEye />}
+                      </button>
+                  </div>
+                  <div className="mt-2">
+                    {passwordTouched && password && (
+                      <>
+                        <div className="grid grid-cols-4 gap-1 h-1.5 mt-2 w-full">
+                          <div className={`rounded-full transition-colors duration-300 ${passwordStrength.score >= 1 ? (passwordStrength.score <= 2 ? 'bg-red-500' : passwordStrength.score <= 4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-200 dark:bg-gray-600'}`}></div>
+                          <div className={`rounded-full transition-colors duration-300 ${passwordStrength.score >= 3 ? (passwordStrength.score <= 4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-200 dark:bg-gray-600'}`}></div>
+                          <div className={`rounded-full transition-colors duration-300 ${passwordStrength.score >= 4 ? (passwordStrength.score <= 4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-200 dark:bg-gray-600'}`}></div>
+                          <div className={`rounded-full transition-colors duration-300 ${passwordStrength.score >= 5 ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600'}`}></div>
+                        </div>
+                        {passwordStrength.label && (
+                          <p className="mt-1 text-xs font-medium text-gray-600 dark:text-gray-400">{passwordStrength.label}</p>
+                        )}
+                      </>
+                    )}
+                    <ul className="mt-2 space-y-1 text-xs">
+                      <li className={passwordRules.length ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}>
+                        At least 8 characters
+                      </li>
+                      <li className={passwordRules.upper ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}>
+                        Contains an uppercase letter (A-Z)
+                      </li>
+                      <li className={passwordRules.lower ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}>
+                        Contains a lowercase letter (a-z)
+                      </li>
+                      <li className={passwordRules.number ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}>
+                        Contains a number (0-9)
+                      </li>
+                      <li className={passwordRules.special ? 'text-green-600' : 'text-gray-500 dark:text-gray-400'}>
+                        Contains a symbol (e.g. !@#$%)
+                      </li>
+                    </ul>
+                  </div>
                 </div>
 
                 {formError && (
@@ -180,7 +268,7 @@ const SignUp = () => {
             )}
 
             <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 Already have an account?{' '}
                 <a href="/signin" className="text-teal-500 hover:text-teal-600 font-medium">Sign in</a>
               </p>

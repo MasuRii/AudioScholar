@@ -2,7 +2,7 @@ import { getAuth, GoogleAuthProvider, sendEmailVerification, signInWithEmailAndP
 import React, { useState } from 'react';
 import { FaGithub } from 'react-icons/fa';
 import { FcGoogle } from 'react-icons/fc';
-import { FiBriefcase, FiCheckCircle, FiCloud, FiLoader, FiMic, FiUpload, FiYoutube } from 'react-icons/fi';
+import { FiBriefcase, FiCheckCircle, FiCloud, FiLoader, FiMic, FiUpload, FiYoutube, FiEye, FiEyeOff } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { firebaseApp } from '../../../config/firebaseConfig';
 import { verifyFirebaseTokenWithBackend, verifyGoogleTokenWithBackend } from '../../../services/authService';
@@ -11,7 +11,12 @@ import { Footer, Header } from '../../Home/HomePage';
 const SignIn = () => {
         const [email, setEmail] = useState('');
         const [password, setPassword] = useState('');
-        const [loading, setLoading] = useState(false);
+        const [showPassword, setShowPassword] = useState(false);
+        
+        const [emailLoading, setEmailLoading] = useState(false);
+        const [googleLoading, setGoogleLoading] = useState(false);
+        const [githubLoading, setGithubLoading] = useState(false);
+        
         const [error, setError] = useState(null);
         const [showResendVerification, setShowResendVerification] = useState(false);
         const navigate = useNavigate();
@@ -19,11 +24,13 @@ const SignIn = () => {
 
         // State for feature carousel
         const [currentFeatureIndex, setCurrentFeatureIndex] = useState(0);
+        
+        const isLoading = emailLoading || googleLoading || githubLoading;
 
 
-        const handleBackendVerification = async (idToken) => {
+        const handleBackendVerification = async (idToken, provider = 'email') => {
                 setError(null);
-                setLoading(true);
+                // Loading state is already set by the caller
                 try {
                         console.log('Sending Firebase ID token to backend for verification...');
                         const backendResponse = await verifyFirebaseTokenWithBackend(idToken);
@@ -39,7 +46,10 @@ const SignIn = () => {
                         console.error('Backend verification error (Firebase Token):', err);
                         setError(err.message || 'Failed to verify authentication with backend.');
                 } finally {
-                        setLoading(false);
+                        if (provider === 'email') setEmailLoading(false);
+                        if (provider === 'google') setGoogleLoading(false);
+                        // Github handles redirect, so no loading stop needed here usually, but good practice
+                        if (provider === 'github') setGithubLoading(false); 
                 }
         };
 
@@ -54,7 +64,7 @@ const SignIn = () => {
                         return;
                 }
 
-                setLoading(true);
+                setEmailLoading(true);
                 try {
                         console.log('Attempting Firebase sign-in with email/password...');
                         const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -64,14 +74,14 @@ const SignIn = () => {
                         if (!user.emailVerified) {
                                 setError('Please verify your email before signing in.');
                                 setShowResendVerification(true);
-                                setLoading(false);
+                                setEmailLoading(false);
                                 return;
                         }
 
                         const idToken = await user.getIdToken();
                         console.log('Obtained Firebase ID Token.');
 
-                        await handleBackendVerification(idToken);
+                        await handleBackendVerification(idToken, 'email');
 
                 } catch (err) {
                         console.error('Firebase email/password sign-in error:', err);
@@ -92,12 +102,14 @@ const SignIn = () => {
                                 }
                         }
                         setError(errorMessage);
-                        setLoading(false);
+                        setEmailLoading(false);
                 }
         };
 
         const handleResendVerification = async () => {
-                setLoading(true);
+                // Reuse emailLoading for this action or create a new one. 
+                // Since it blocks the form, emailLoading is acceptable or a local loading state.
+                setEmailLoading(true); 
                 try {
                         await sendEmailVerification(auth.currentUser);
                         setError('A new verification email has been sent. Please check your inbox.');
@@ -105,14 +117,14 @@ const SignIn = () => {
                         console.error('Error resending verification email:', err);
                         setError('Failed to resend verification email. Please try again later.');
                 } finally {
-                        setLoading(false);
+                        setEmailLoading(false);
                 }
         };
 
 
         const handleGoogleSignIn = async () => {
                 setError(null);
-                setLoading(true);
+                setGoogleLoading(true);
                 const provider = new GoogleAuthProvider();
                 provider.addScope('email');
                 provider.addScope('profile');
@@ -132,6 +144,9 @@ const SignIn = () => {
                         console.log('Obtained Google ID Token.');
 
                         console.log('Sending Google ID token to backend for verification...');
+                        // Note: We should probably use verifyFirebaseTokenWithBackend here as well to keep it consistent
+                        // if verifyGoogleTokenWithBackend is just a wrapper or deprecated.
+                        // But following existing pattern:
                         const backendResponse = await verifyGoogleTokenWithBackend(googleIdToken);
                         console.log('Backend verification successful (Google Token):', backendResponse);
 
@@ -147,7 +162,7 @@ const SignIn = () => {
                                 switch (err.code) {
                                         case 'auth/popup-closed-by-user':
                                                 errorMessage = 'Sign-in cancelled.';
-                                                setLoading(false);
+                                                setGoogleLoading(false);
                                                 return;
                                         case 'auth/account-exists-with-different-credential':
                                                 errorMessage = 'An account already exists with this email using a different sign-in method.';
@@ -157,11 +172,12 @@ const SignIn = () => {
                                 }
                         }
                         setError(errorMessage);
-                        setLoading(false);
+                        setGoogleLoading(false);
                 }
         };
 
         const handleGithubSignIn = () => {
+                setGithubLoading(true);
                 const githubClientId = 'Iv23liMzUNGL8JuXu40i';
 
                 const isProduction = window.location.hostname === 'it342-g3-audioscholar.onrender.com';
@@ -229,11 +245,11 @@ const SignIn = () => {
         return (
                 <>
                         <Header />
-                        <main className="flex-grow flex items-center justify-center py-12 bg-gray-50 overflow-hidden">
+                        <main className="flex-grow flex items-center justify-center py-12 bg-gray-50 dark:bg-gray-900 overflow-hidden">
                                 <title>AudioScholar - Sign In</title>
                                 <div className="container mx-auto px-4 animate-fade-in-up">
                                         <div className="max-w-4xl mx-auto grid md:grid-cols-2 rounded-lg shadow-xl overflow-hidden">
-                                                <div className="hidden md:block bg-[#2D8A8A] p-8 text-white flex flex-col h-full">
+                                                <div className="hidden md:block bg-[#2D8A8A] dark:bg-teal-800 p-8 text-white flex flex-col h-full">
                                                         <div className="flex-shrink-0 mb-8">
                                                                 <h2 className="text-3xl font-bold mb-3">Unlock Your Learning Potential</h2>
                                                                 <p className="text-gray-200 text-sm">
@@ -314,60 +330,73 @@ const SignIn = () => {
                                                                                                                                 {/* Fallback or Spacer if no features, or to help with justify-between if used */}
                                                                                                                                 {signInFeatures.length === 0 && <div className="flex-grow"></div>} {/* Adjusted condition from !displayedFeature */}
                                                                                                                         </div>
-                                                <div className="bg-white p-8 md:p-10">
-                                                        <h1 className="text-3xl font-bold text-gray-800 mb-2">Sign In</h1>
-                                                        <p className="text-gray-600 mb-6">Welcome back! Please enter your details or sign in with Google.</p>
+                                                <div className="bg-white dark:bg-gray-800 p-8 md:p-10">
+                                                        <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Sign In</h1>
+                                                        <p className="text-gray-600 dark:text-gray-300 mb-6">Welcome back! Please enter your details or sign in with Google.</p>
 
                                                         <div className="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                                                                 <button
                                                                         onClick={handleGoogleSignIn}
                                                                         className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105 relative"
-                                                                        disabled={loading}
+                                                                        disabled={isLoading}
                                                                 >
-                                                                        {loading ? (
+                                                                        {googleLoading ? (
                                                                                 <FiLoader className="w-5 h-5 animate-spin text-gray-500" />
                                                                         ) : (
                                                                                 <FcGoogle className="w-5 h-5" />
                                                                         )}
-                                                                        <span className="text-sm font-medium text-gray-700">{loading ? 'Processing...' : 'Sign in with Google'}</span>
+                                                                        <span className="text-sm font-medium text-gray-700">{googleLoading ? 'Processing...' : 'Sign in with Google'}</span>
                                                                 </button>
                                                                 <button
                                                                         onClick={handleGithubSignIn}
                                                                         className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105"
-                                                                        disabled={loading}
+                                                                        disabled={isLoading}
                                                                 >
-                                                                        <FaGithub className="w-5 h-5" />
-                                                                        <span className="text-sm font-medium text-gray-700">Sign in with Github</span>
+                                                                        {githubLoading ? (
+                                                                                <FiLoader className="w-5 h-5 animate-spin text-gray-500" />
+                                                                         ) : (
+                                                                                <FaGithub className="w-5 h-5" />
+                                                                         )}
+                                                                        <span className="text-sm font-medium text-gray-700">{githubLoading ? 'Processing...' : 'Sign in with Github'}</span>
                                                                 </button>
                                                         </div>
 
                                                         <form className="space-y-4 animate-fade-in-up" style={{ animationDelay: '200ms' }} onSubmit={handleSubmit}>
                                                                 <div>
-                                                                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                                                        <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                                                                         <input
                                                                                 type="email"
                                                                                 id="email"
-                                                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2D8A8A] focus:border-[#2D8A8A]"
+                                                                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#2D8A8A] focus:border-[#2D8A8A] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                                                                                 placeholder="Enter your email"
                                                                                 value={email}
                                                                                 onChange={(e) => setEmail(e.target.value)}
                                                                                 required
-                                                                                disabled={loading}
+                                                                                disabled={isLoading}
                                                                         />
                                                                 </div>
 
                                                                 <div>
-                                                                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                                                                        <input
-                                                                                type="password"
-                                                                                id="password"
-                                                                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2D8A8A] focus:border-[#2D8A8A]"
-                                                                                placeholder="Enter your password"
-                                                                                value={password}
-                                                                                onChange={(e) => setPassword(e.target.value)}
-                                                                                required
-                                                                                disabled={loading}
-                                                                        />
+                                                                        <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                                                                        <div className="relative">
+                                                                            <input
+                                                                                    type={showPassword ? "text" : "password"}
+                                                                                    id="password"
+                                                                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#2D8A8A] focus:border-[#2D8A8A] dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+                                                                                    placeholder="Enter your password"
+                                                                                    value={password}
+                                                                                    onChange={(e) => setPassword(e.target.value)}
+                                                                                    required
+                                                                                    disabled={isLoading}
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => setShowPassword(!showPassword)}
+                                                                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 focus:outline-none"
+                                                                            >
+                                                                                {showPassword ? <FiEyeOff /> : <FiEye />}
+                                                                            </button>
+                                                                        </div>
                                                                 </div>
 
                                                                 {error && (
@@ -378,31 +407,35 @@ const SignIn = () => {
                                                                         <button
                                                                                 onClick={handleResendVerification}
                                                                                 className="w-full bg-yellow-500 text-white py-2 px-4 rounded-lg font-medium transition hover:bg-yellow-600"
-                                                                                disabled={loading}
+                                                                                disabled={isLoading}
                                                                         >
-                                                                                {loading ? 'Sending...' : 'Resend Verification Email'}
+                                                                                {emailLoading ? 'Sending...' : 'Resend Verification Email'}
                                                                         </button>
                                                                 )}
 
                                                                 <div className="flex items-center justify-between text-sm">
                                                                         <div className="flex items-center">
                                                                                 <input id="remember-me" name="remember-me" type="checkbox" className="h-4 w-4 text-[#2D8A8A] focus:ring-[#236b6b] border-gray-300 rounded" />
-                                                                                <label htmlFor="remember-me" className="ml-2 block text-gray-900">Remember me</label>
+                                                                                <label htmlFor="remember-me" className="ml-2 block text-gray-900 dark:text-gray-300">Remember me</label>
                                                                         </div>
                                                                         <Link to="/forgot-password" className="font-medium text-[#2D8A8A] hover:text-[#236b6b]">Forgot password?</Link>
                                                                 </div>
 
                                                                 <button
                                                                         type="submit"
-                                                                        className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium transition ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b]'} transform hover:scale-105`}
-                                                                        disabled={loading}
+                                                                        className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium transition ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b]'} transform hover:scale-105`}
+                                                                        disabled={isLoading}
                                                                 >
-                                                                        {loading ? 'Signing In...' : 'Log In with Email'}
+                                                                        {emailLoading ? (
+                                                                            <span className="flex items-center justify-center gap-2">
+                                                                                <FiLoader className="w-5 h-5 animate-spin" /> Signing In...
+                                                                            </span>
+                                                                        ) : 'Log In with Email'}
                                                                 </button>
                                                         </form>
 
                                                         <div className="mt-6 text-center">
-                                                                <p className="text-sm text-gray-600">
+                                                                <p className="text-sm text-gray-600 dark:text-gray-400">
                                                                         Don't have an account?{' '}
                                                                         {/* Ensure your Sign Up page also uses Firebase Auth */}
                                                                         <Link to="/signup" className="text-[#2D8A8A] hover:text-[#236b6b] font-medium">Sign up</Link>

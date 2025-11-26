@@ -1,20 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 @import "tailwindcss";
 @plugin '@tailwindcss/typography';
 
+@variant dark (&:where(.dark, .dark *));
+
 /* Custom styles */
 body {
-    font-family: 'Inter', sans-serif; /* Example: Using Inter font */
+    font-family: 'Inter', sans-serif;
     @apply bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300;
 }
 
-/* Add custom animations here */
-@layer utilities {
+/* Custom animations */
+@theme {
+  --animate-fade-in-up: fade-in-up 0.5s ease-out forwards;
+  
   @keyframes fade-in-up {
     0% {
       opacity: 0;
@@ -24,8 +22,5 @@ body {
       opacity: 1;
       transform: translateY(0);
     }
-  }
-  .animate-fade-in-up {
-    animation: fade-in-up 0.5s ease-out forwards;
   }
 }
