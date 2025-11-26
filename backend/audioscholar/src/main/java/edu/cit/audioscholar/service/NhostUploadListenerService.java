@@ -92,8 +92,9 @@ public class NhostUploadListenerService {
 			try {
 				executeStatusUpdate(metadataId, null, ProcessingStatus.FAILED,
 						"Temporary file missing/unreadable before upload: " + tempFilePath.getFileName());
-			} catch (FirestoreInteractionException e) {
-				log.warn("Could not update status for missing file (stale message?): [{}]. Ignoring.", metadataId);
+			} catch (Exception e) {
+				log.warn("Could not update status for missing file (stale message?): [{}]. Error: {}. Ignoring.",
+						metadataId, e.getMessage());
 			}
 			return;
 		}

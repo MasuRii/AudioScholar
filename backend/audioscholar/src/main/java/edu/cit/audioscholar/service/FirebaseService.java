@@ -373,9 +373,17 @@ public class FirebaseService {
 			String updateTime = future.get().getUpdateTime().toString();
 			log.info("Data updated via Map for {}/{} at {}", collection, document, updateTime);
 			return updateTime;
-		} catch (ExecutionException | InterruptedException e) {
+		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
-			log.error("Error updating data via Map for {}/{}", collection, document, e);
+			log.error("Interrupted while updating data via Map for {}/{}", collection, document, e);
+			throw new FirestoreInteractionException("Interrupted while updating data in Firestore", e);
+		} catch (ExecutionException e) {
+			if (e.getMessage() != null && e.getMessage().contains("NOT_FOUND")) {
+				log.warn("Document not found during update (likely stale) for {}/{}: {}", collection, document,
+						e.getMessage());
+			} else {
+				log.error("Error updating data via Map for {}/{}", collection, document, e);
+			}
 			throw new FirestoreInteractionException("Error updating data in Firestore", e);
 		}
 	}
