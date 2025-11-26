@@ -238,6 +238,7 @@ const UserProfileEdit = () => {
                   src={avatarPreview || currentProfileImageUrl || '/icon-512.png'}
                   alt="Avatar Preview"
                   className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-md"
+                  onError={(e) => { e.target.onerror = null; e.target.src = '/icon-512.png'; }}
                 />
                 <input
                   type="file"

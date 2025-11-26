@@ -109,6 +109,7 @@ export const Header = () => {
                                         alt="Profile" 
                                         className="w-5 h-5 rounded-full object-cover border border-gray-300"
                                         referrerPolicy="no-referrer"
+                                        onError={(e) => { e.target.onerror = null; e.target.src = '/icon-512.png'; }}
                                     />
                                 ) : (
                                     <FiUser className="w-4 h-4" />

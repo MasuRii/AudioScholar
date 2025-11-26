@@ -1,4 +1,15 @@
-export const API_BASE_URL = 'http://localhost:8080/';
+// Determine the API base URL dynamically based on the environment
+const getApiBaseUrl = () => {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:8080/';
+    } else {
+        // Production URL - Update this if your Render backend URL is different
+        return 'https://it342-g3-audioscholar-backend.onrender.com/';
+    }
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 /**
  * Sends the Firebase ID token obtained from frontend Firebase authentication
