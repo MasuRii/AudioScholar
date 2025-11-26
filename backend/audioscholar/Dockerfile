@@ -1,7 +1,7 @@
 # ===================================================================
-# Stage 1: Build using Maven + Java 24 (Stable)
+# Stage 1: Build using Maven + Java 24
 # ===================================================================
-# Use the official Maven image with Eclipse Temurin Java 24
+# The build stage worked in your logs, so we keep this exact tag
 FROM maven:3.9.9-eclipse-temurin-24 AS builder
 WORKDIR /app
 
@@ -15,10 +15,10 @@ COPY src ./src
 RUN mvn package -DskipTests -B -Ddependency-check.skip=true
 
 # ===================================================================
-# Stage 2: Run using Java 24 JRE (Stable)
+# Stage 2: Run using Java 24 JRE
 # ===================================================================
-# REMOVED "-ea" from the tag because Java 24 is now GA
-FROM eclipse-temurin:24-jre-jammy
+# FIXED: Removed "-jammy". We rely on the default tag for Java 24 JRE.
+FROM eclipse-temurin:24-jre
 WORKDIR /app
 
 # Install font libraries (Required for Apache POI/PDFBox)
