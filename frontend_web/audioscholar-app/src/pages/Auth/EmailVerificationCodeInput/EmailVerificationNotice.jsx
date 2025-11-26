@@ -78,15 +78,15 @@ const EmailVerificationNotice = () => {
     return (
         <>
             <Header />
-            <main className="flex-grow flex items-center justify-center py-12 bg-gray-50">
+            <main className="flex-grow flex items-center justify-center py-12 bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
                 <title>AudioScholar - Verify Email</title>
                 <div className="container mx-auto px-4 animate-fade-in-up">
-                    <div className="max-w-md mx-auto bg-white rounded-lg shadow-xl overflow-hidden">
+                    <div className="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden transition-colors duration-200">
                         <div className="p-8 md:p-10">
                             <div className="text-center mb-6">
                                 <FiMail className="w-12 h-12 mx-auto text-[#2D8A8A]" />
-                                <h1 className="text-3xl font-bold text-gray-800 mt-4">Verify Your Email</h1>
-                                <p className="text-gray-600 mt-2">
+                                <h1 className="text-3xl font-bold text-gray-800 dark:text-white mt-4">Verify Your Email</h1>
+                                <p className="text-gray-600 dark:text-gray-300 mt-2">
                                     We sent an email with a verification link to <strong>{location.state?.email}</strong>. Please check your inbox and click the link to verify your email address.
                                 </p>
                             </div>
@@ -97,7 +97,7 @@ const EmailVerificationNotice = () => {
                             <div className="mt-6 text-center">
                                 {resendAttempts < 2 ? (
                                     <>
-                                        <p className="text-gray-600">
+                                        <p className="text-gray-600 dark:text-gray-400">
                                             Didn't receive the email?{' '}
                                             <button
                                                 onClick={handleResendVerification}
@@ -108,7 +108,7 @@ const EmailVerificationNotice = () => {
                                             </button>
                                         </p>
                                         {!canResend && timer > 0 && (
-                                            <p className="text-gray-500 text-sm mt-2">
+                                            <p className="text-gray-500 dark:text-gray-500 text-sm mt-2">
                                                 You can resend the link in {Math.floor(timer / 60)}:{('0' + (timer % 60)).slice(-2)} minutes.
                                             </p>
                                         )}

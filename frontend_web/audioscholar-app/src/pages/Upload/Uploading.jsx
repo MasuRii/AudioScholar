@@ -178,10 +178,7 @@ const Uploading = () => {
       setError('Please select an audio file first');
       return;
     }
-    if (!selectedPptxFile) {
-      setError('Please select a PowerPoint file');
-      return;
-    }
+    // PowerPoint is optional
     if (!title.trim()) {
        setError('Please enter a title for the recording.');
        return;
@@ -274,10 +271,10 @@ const Uploading = () => {
       <title>AudioScholar - Upload Recording</title>
       <Header />
 
-      <main className="flex-grow flex items-center justify-center py-12 bg-gray-50">
+      <main className="flex-grow flex items-center justify-center py-12 bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
         <div className="container mx-auto px-4 max-w-4xl">
-          <div className="bg-white rounded-lg shadow-xl p-8 md:p-10">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">Upload Recording</h1>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 md:p-10 transition-colors duration-200">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6 text-center">Upload Recording</h1>
 
             <input
               type="file"
@@ -299,20 +296,20 @@ const Uploading = () => {
             />
 
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1 font-semibold">Audio File (Required)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 font-semibold">Audio File (Required)</label>
               <div
                 onClick={handleAudioClick}
-                className={`border-2 border-dashed border-gray-300 rounded-lg p-6 text-center transition-colors duration-200 ${loading ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:bg-gray-100 hover:border-teal-400'}`}
+                className={`border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center transition-colors duration-200 ${loading ? 'opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-700' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-teal-400 dark:hover:border-teal-400'}`}
               >
                 {audioFileName ? (
                   <div className="flex flex-col items-center justify-center gap-2">
-                    <FiFile className="h-8 w-8 text-teal-600" />
-                    <p className="text-gray-800 font-medium text-sm truncate max-w-xs">{audioFileName}</p>
+                    <FiFile className="h-8 w-8 text-teal-600 dark:text-teal-400" />
+                    <p className="text-gray-800 dark:text-gray-200 font-medium text-sm truncate max-w-xs">{audioFileName}</p>
                     {!loading && (
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); removeAudioFile(); }}
-                        className="mt-1 text-red-600 hover:text-red-800 transition-colors duration-150 p-1 rounded-full hover:bg-red-100 inline-flex items-center gap-1 text-xs font-medium"
+                        className="mt-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-150 p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 inline-flex items-center gap-1 text-xs font-medium"
                         title="Remove audio file"
                       >
                         <FiXCircle className="h-4 w-4"/> Remove
@@ -321,16 +318,16 @@ const Uploading = () => {
                   </div>
                 ) : (
                   <div>
-                    <FiUpload className="mx-auto h-10 w-10 text-gray-400" />
-                    <p className="text-gray-600 mt-2 mb-1 text-sm">Click to select audio file</p>
-                    <p className="text-xs text-gray-500">Supports: {VALID_AUDIO_EXTENSIONS.join(', ').toUpperCase()}</p>
+                    <FiUpload className="mx-auto h-10 w-10 text-gray-400 dark:text-gray-500" />
+                    <p className="text-gray-600 dark:text-gray-300 mt-2 mb-1 text-sm">Click to select audio file</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Supports: {VALID_AUDIO_EXTENSIONS.join(', ').toUpperCase()}</p>
                   </div>
                 )}
               </div>
-              {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+              {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
               {audioPreviewUrl && !loading && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <h3 className="text-xs font-medium text-gray-600 mb-1">Audio Preview:</h3>
+                <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  <h3 className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Audio Preview:</h3>
                   <audio controls src={audioPreviewUrl} className="w-full h-9" >
                     Your browser does not support the audio element.
                   </audio>
@@ -339,20 +336,20 @@ const Uploading = () => {
             </div>
 
             <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1 font-semibold">PowerPoint File (Required)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 font-semibold">PowerPoint File (Optional)</label>
                <div
                  onClick={handlePptxClick}
-                 className={`border-2 border-dashed border-gray-300 rounded-lg p-6 text-center transition-colors duration-200 ${loading ? 'opacity-60 cursor-not-allowed bg-gray-100' : 'cursor-pointer hover:bg-gray-100 hover:border-teal-400'}`}
+                 className={`border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center transition-colors duration-200 ${loading ? 'opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-700' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 hover:border-teal-400 dark:hover:border-teal-400'}`}
                >
                  {pptxFileName ? (
                    <div className="flex flex-col items-center justify-center gap-2">
-                     <FiFileText className="h-8 w-8 text-blue-600" />
-                     <p className="text-gray-800 font-medium text-sm truncate max-w-xs">{pptxFileName}</p>
+                     <FiFileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                     <p className="text-gray-800 dark:text-gray-200 font-medium text-sm truncate max-w-xs">{pptxFileName}</p>
                      {!loading && (
                        <button
                          type="button"
                          onClick={(e) => { e.stopPropagation(); removePptxFile(); }}
-                         className="mt-1 text-red-600 hover:text-red-800 transition-colors duration-150 p-1 rounded-full hover:bg-red-100 inline-flex items-center gap-1 text-xs font-medium"
+                         className="mt-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-150 p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 inline-flex items-center gap-1 text-xs font-medium"
                          title="Remove PowerPoint file"
                        >
                          <FiXCircle className="h-4 w-4"/> Remove
@@ -361,25 +358,25 @@ const Uploading = () => {
                    </div>
                  ) : (
                    <div>
-                     <FiUpload className="mx-auto h-10 w-10 text-gray-400" />
-                     <p className="text-gray-600 mt-2 mb-1 text-sm">Click to select PowerPoint file</p>
-                     <p className="text-xs text-gray-500">Supports: {VALID_PPTX_EXTENSIONS.join(', ').toUpperCase()}</p>
+                     <FiUpload className="mx-auto h-10 w-10 text-gray-400 dark:text-gray-500" />
+                     <p className="text-gray-600 dark:text-gray-300 mt-2 mb-1 text-sm">Click to select PowerPoint file</p>
+                     <p className="text-xs text-gray-500 dark:text-gray-400">Supports: {VALID_PPTX_EXTENSIONS.join(', ').toUpperCase()}</p>
                    </div>
                  )}
                </div>
-               {pptxError && <p className="mt-2 text-sm text-red-600">{pptxError}</p>}
+               {pptxError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{pptxError}</p>}
             </div>
 
-            <form onSubmit={handleFileUpload} className="space-y-6 border-t pt-6">
+            <form onSubmit={handleFileUpload} className="space-y-6 border-t border-gray-200 dark:border-gray-700 pt-6">
               <div>
-                <label htmlFor="audio-title" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="audio-title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   <span className="font-bold">Title:</span>
-                  <span className="ml-1 text-gray-500">Enter title for your recording</span>
+                  <span className="ml-1 text-gray-500 dark:text-gray-400">Enter title for your recording</span>
                 </label>
                 <input
                   type="text"
                   id="audio-title"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-700 dark:text-white transition duration-150 ease-in-out shadow-sm disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
                   placeholder="Enter title for your recording (required)"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -389,12 +386,12 @@ const Uploading = () => {
               </div>
 
               <div>
-                <label htmlFor="audio-description" className="block text-sm font-medium text-gray-700 mb-1">
+                <label htmlFor="audio-description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   <span className="font-bold">Description (Optional):</span>
                 </label>
                 <textarea
                   id="audio-description"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 min-h-[80px] transition duration-150 ease-in-out shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 dark:bg-gray-700 dark:text-white min-h-[80px] transition duration-150 ease-in-out shadow-sm disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
                   placeholder="Add a description for your recording"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -403,13 +400,13 @@ const Uploading = () => {
               </div>
 
               <div className="h-6">
-                 {success && <p className="text-sm text-green-600 text-center flex items-center justify-center gap-1"><FiCheckCircle/>{success}</p>}
+                 {success && <p className="text-sm text-green-600 dark:text-green-400 text-center flex items-center justify-center gap-1"><FiCheckCircle/>{success}</p>}
                </div>
 
               <button
                 type="submit"
-                disabled={!selectedAudioFile || !selectedPptxFile || loading || !title.trim()}
-                className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 ease-in-out ${(!selectedAudioFile || !selectedPptxFile || loading || !title.trim()) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b] hover:shadow-md transform hover:-translate-y-0.5'}`}
+                disabled={!selectedAudioFile || loading || !title.trim()}
+                className={`w-full bg-[#2D8A8A] text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 ease-in-out ${(!selectedAudioFile || loading || !title.trim()) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#236b6b] hover:shadow-md transform hover:-translate-y-0.5'}`}
               >
                 {loading ? <><FiLoader className="animate-spin h-5 w-5" /> Uploading...</> : <><FiUpload className="h-5 w-5"/> Upload Recording</>}
               </button>

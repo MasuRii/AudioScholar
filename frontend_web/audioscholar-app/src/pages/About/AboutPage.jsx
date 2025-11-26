@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Header, Footer } from './../Home/HomePage'; // Import Header/Footer from HomePage
 
 const AboutPage = () => {
+  useEffect(() => {
+    window.scrollTo(0, 0); // Scroll to top on component mount
+  }, []);
+
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
+      <title>AudioScholar - About Us</title>
       <Header />
       <main className="flex-grow">
         {/* Hero Section */}
@@ -18,16 +23,16 @@ const AboutPage = () => {
         </section>
 
         {/* Our Mission */}
-        <section className="py-16 bg-white">
+        <section className="py-16 bg-white dark:bg-gray-800 transition-colors duration-200">
           <div className="container mx-auto px-4 max-w-4xl">
-            <h2 className="text-3xl font-bold text-center text-gray-800 mb-12">Our Mission</h2>
-            <p className="text-lg text-gray-700 leading-relaxed text-center mb-6">
+            <h2 className="text-3xl font-bold text-center text-gray-800 dark:text-white mb-12">Our Mission</h2>
+            <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed text-center mb-6">
               At AudioScholar, our mission is to empower students, professionals, and lifelong learners
               by transforming spoken knowledge into accessible, structured, and actionable insights.
               We believe that valuable information shared in lectures, meetings, and discussions
               should be easily captured, understood, and revisited.
             </p>
-            <p className="text-lg text-gray-700 leading-relaxed text-center">
+            <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed text-center">
               We leverage the power of cutting-edge AI to automate the tedious process of note-taking
               and summarizing, allowing you to focus on what truly matters: learning and comprehension.
             </p>
@@ -35,10 +40,10 @@ const AboutPage = () => {
         </section>
 
         {/* How It Works / Features Summary (Optional but recommended) */}
-        <section className="py-16 bg-teal-50"> 
+        <section className="py-16 bg-teal-50 dark:bg-gray-900 transition-colors duration-200"> 
           <div className="container mx-auto px-4 max-w-4xl">
-            <h2 className="text-3xl font-bold text-center text-[#1A365D] mb-12">How It Works</h2>
-             <p className="text-lg text-gray-700 leading-relaxed text-center mb-6">
+            <h2 className="text-3xl font-bold text-center text-[#1A365D] dark:text-teal-300 mb-12">How It Works</h2>
+             <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed text-center mb-6">
                 AudioScholar simplifies capturing and understanding audio. Upload your recordings, and our AI
                 generates summaries, identifies key points, and provides helpful insights.
                 Access everything easily through your dashboard.
@@ -47,7 +52,7 @@ const AboutPage = () => {
              <div className="text-center mt-8">
                 <Link 
                     to="/#features" // Link to features section on homepage
-                    className="text-teal-600 hover:text-teal-800 font-semibold mr-4"
+                    className="text-teal-600 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-500 font-semibold mr-4"
                 >
                     Learn More About Features
                 </Link>
@@ -62,10 +67,10 @@ const AboutPage = () => {
         </section>
 
         {/* Our Vision */}
-        <section className="py-16 bg-white">
+        <section className="py-16 bg-white dark:bg-gray-800 transition-colors duration-200">
           <div className="container mx-auto px-4 max-w-4xl text-center">
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Our Vision</h2>
-            <p className="text-lg text-gray-700 leading-relaxed">
+            <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">Our Vision</h2>
+            <p className="text-lg text-gray-700 dark:text-gray-300 leading-relaxed">
               We envision a future where learning from audio is as efficient and effective as reading.
               AudioScholar aims to be the essential tool for anyone looking to maximize their comprehension
               and retention of spoken information.
