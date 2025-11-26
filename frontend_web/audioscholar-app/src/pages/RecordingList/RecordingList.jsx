@@ -1,6 +1,6 @@
 import axios from 'axios';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud, FiSearch, FiRefreshCw } from 'react-icons/fi';
+import { FiAlertTriangle, FiCheckCircle, FiClock, FiExternalLink, FiFile, FiLoader, FiTrash2, FiUploadCloud, FiSearch, FiRefreshCw, FiWifiOff } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../services/authService';
 import { Header } from '../Home/HomePage';
@@ -475,17 +475,19 @@ const RecordingList = () => {
                     )}
 
                     {error && !loading && (
-                         <div className="flex flex-col items-center justify-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-                            <div className="bg-red-100 p-4 rounded-full mb-4">
-                                <FiAlertTriangle className="w-8 h-8 text-red-600" />
+                         <div className="flex flex-col items-center justify-center py-16 px-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 max-w-lg mx-auto mt-8 animate-fade-in">
+                            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-full mb-4 ring-8 ring-red-50/50 dark:ring-red-900/10">
+                                <FiWifiOff className="w-8 h-8 text-red-500 dark:text-red-400" />
                             </div>
-                            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Failed to fetch recordings</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-6 text-center max-w-md">{error}</p>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">Unable to Load Recordings</h3>
+                            <p className="text-gray-600 dark:text-gray-300 mb-8 text-center leading-relaxed">
+                                {error === 'Network Error' ? 'Please check your internet connection and try again.' : error}
+                            </p>
                             <button
                                 onClick={handleRetry}
-                                className="flex items-center gap-2 px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-md font-medium transition-colors"
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
                             >
-                                <FiRefreshCw className="w-4 h-4" /> Retry
+                                <FiRefreshCw className="w-4 h-4" /> Try Again
                             </button>
                         </div>
                     )}

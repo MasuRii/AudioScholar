@@ -337,27 +337,27 @@ const SignIn = () => {
                                                         <div className="flex flex-col sm:flex-row gap-4 mb-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
                                                                 <button
                                                                         onClick={handleGoogleSignIn}
-                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105 relative"
+                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 transition disabled:opacity-50 transform hover:scale-105 relative"
                                                                         disabled={isLoading}
                                                                 >
                                                                         {googleLoading ? (
-                                                                                <FiLoader className="w-5 h-5 animate-spin text-gray-500" />
+                                                                                <FiLoader className="w-5 h-5 animate-spin text-gray-500 dark:text-gray-300" />
                                                                         ) : (
                                                                                 <FcGoogle className="w-5 h-5" />
                                                                         )}
-                                                                        <span className="text-sm font-medium text-gray-700">{googleLoading ? 'Processing...' : 'Sign in with Google'}</span>
+                                                                        <span className="text-sm font-medium text-gray-700 dark:text-white">{googleLoading ? 'Processing...' : 'Sign in with Google'}</span>
                                                                 </button>
                                                                 <button
                                                                         onClick={handleGithubSignIn}
-                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 transform hover:scale-105"
+                                                                        className="flex-1 flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:bg-gray-700 dark:hover:bg-gray-600 transition disabled:opacity-50 transform hover:scale-105"
                                                                         disabled={isLoading}
                                                                 >
                                                                         {githubLoading ? (
-                                                                                <FiLoader className="w-5 h-5 animate-spin text-gray-500" />
+                                                                                <FiLoader className="w-5 h-5 animate-spin text-gray-500 dark:text-gray-300" />
                                                                          ) : (
-                                                                                <FaGithub className="w-5 h-5" />
+                                                                                <FaGithub className="w-5 h-5 dark:text-white" />
                                                                          )}
-                                                                        <span className="text-sm font-medium text-gray-700">{githubLoading ? 'Processing...' : 'Sign in with Github'}</span>
+                                                                        <span className="text-sm font-medium text-gray-700 dark:text-white">{githubLoading ? 'Processing...' : 'Sign in with Github'}</span>
                                                                 </button>
                                                         </div>
 
