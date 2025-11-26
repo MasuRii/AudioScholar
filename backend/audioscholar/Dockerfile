@@ -22,7 +22,7 @@ RUN apk add --no-cache fontconfig ttf-dejavu
 COPY --from=builder /app/target/audioscholar-*.jar app.jar
 
 # Extract layers for faster startup (if supported) or just for structure
-RUN java -Djarmode=layertools -jar app.jar extract
+RUN java -Djarmode=tools -jar app.jar extract --layers --launcher
 
 # Optimized ENTRYPOINT for exploded JAR (no -jar flag; use classpath instead)
 # We run from the extracted layers using -cp to point to specific directories
