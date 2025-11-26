@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Build results
+target/
+build/
+out/
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE settings
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+.factorypath
+.springBeans
+.sts4-cache
+nbproject/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+docs/
+
+# Logs
+*.log
+logs/
+springboot.log
+springbootbackend-test.log
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Environment variables & Secrets
+.env
+.kiloignore
+firebase.json
+firestore.indexes.json
+src/main/resources/firebase-service-account.json
+
+# Local Scripts
+run-with-env.bat
+run-with-env.sh
+mvnw
+mvnw.cmd
+
+# Temporary files
+src/main/resources/uploads/
+temp/
+tmp/

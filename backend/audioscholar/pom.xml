@@ -286,6 +286,9 @@
 					<jvmArguments>
 						--enable-native-access=ALL-UNNAMED
 					</jvmArguments>
+					<layers>
+						<enabled>true</enabled>
+					</layers>
 				</configuration>
 			</plugin>
 
