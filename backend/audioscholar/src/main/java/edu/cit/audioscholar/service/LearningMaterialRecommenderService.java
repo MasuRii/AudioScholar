@@ -1,5 +1,6 @@
 package edu.cit.audioscholar.service;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -30,7 +31,17 @@ import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.WriteBatch;
 import com.google.cloud.firestore.WriteResult;
+import com.google.common.base.Optional;
 import com.google.firebase.messaging.MulticastMessage;
+import com.optimaize.langdetect.LanguageDetector;
+import com.optimaize.langdetect.LanguageDetectorBuilder;
+import com.optimaize.langdetect.i18n.LdLocale;
+import com.optimaize.langdetect.ngram.NgramExtractors;
+import com.optimaize.langdetect.profiles.LanguageProfile;
+import com.optimaize.langdetect.profiles.LanguageProfileReader;
+import com.optimaize.langdetect.text.CommonTextObjectFactories;
+import com.optimaize.langdetect.text.TextObject;
+import com.optimaize.langdetect.text.TextObjectFactory;
 
 import edu.cit.audioscholar.dto.AnalysisResults;
 import edu.cit.audioscholar.integration.YouTubeAPIClient;
@@ -38,6 +49,7 @@ import edu.cit.audioscholar.model.LearningRecommendation;
 import edu.cit.audioscholar.model.ProcessingStatus;
 import edu.cit.audioscholar.model.Recording;
 import edu.cit.audioscholar.util.RobustTaskExecutor;
+import jakarta.annotation.PostConstruct;
 
 @Service
 public class LearningMaterialRecommenderService {
@@ -52,17 +64,11 @@ public class LearningMaterialRecommenderService {
 	private final RobustTaskExecutor robustTaskExecutor;
 	private static final int MAX_RECOMMENDATIONS_TO_FETCH = 10;
 	private static final int SEARCH_RESULTS_POOL_SIZE = 50;
-	private static final String EDUCATIONAL_CONTEXT = "lecture educational tutorial";
 	private static final Set<String> EDUCATIONAL_DOMAINS = Set.of("edu", "education", "academic", "university",
 			"school", "college", "course");
-	private static final String TARGET_LANGUAGE = "english";
-	private static final Set<String> FOREIGN_LANGUAGE_INDICATORS = Set.of("hindi", "urdu", "español", "arabic",
-			"العربية", "中文", "chinese", "русский", "russian", "française", "français", "french", "日本語", "japanese",
-			"한국어", "korean", "deutsch", "german", "italiano", "italian", "português", "portuguese", "bahasa",
-			"indonesian", "malayalam", "tamil", "telugu", "bengali", "marathi");
-	private static final Set<String> NON_ENGLISH_REGIONS = Set.of("india", "pakistan", "russia", "china", "japan",
-			"korea", "spain", "méxico", "mexico", "brazil", "brasil", "indonesia", "malaysia", "thailand", "vietnam",
-			"türkiye", "turkey", "arabic", "saudi", "ukraine", "czech", "poland", "hungary", "romania");
+
+	private LanguageDetector languageDetector;
+	private TextObjectFactory textObjectFactory;
 
 	public LearningMaterialRecommenderService(LectureContentAnalyzerService lectureContentAnalyzerService,
 			YouTubeAPIClient youTubeAPIClient, Firestore firestore, RecordingService recordingService,
@@ -79,6 +85,19 @@ public class LearningMaterialRecommenderService {
 		this.robustTaskExecutor = robustTaskExecutor;
 	}
 
+	@PostConstruct
+	public void initLanguageDetector() {
+		try {
+			List<LanguageProfile> languageProfiles = new LanguageProfileReader().readAllBuiltIn();
+			languageDetector = LanguageDetectorBuilder.create(NgramExtractors.standard()).withProfiles(languageProfiles)
+					.build();
+			textObjectFactory = CommonTextObjectFactories.forDetectingOnLargeText();
+			log.info("Language Detector initialized successfully.");
+		} catch (IOException e) {
+			log.error("Failed to initialize Language Detector", e);
+		}
+	}
+
 	public List<LearningRecommendation> generateAndSaveRecommendations(String userId, String recordingId,
 			String summaryId) {
 		log.info("Starting recommendation generation and storage for recording ID: {}, user: {}, summary: {}",
@@ -89,30 +108,20 @@ public class LearningMaterialRecommenderService {
 					analysisResults.getErrorMessage());
 			return Collections.emptyList();
 		}
-		List<String> keywords = analysisResults.getKeywordsAndTopics();
-		if (keywords.isEmpty()) {
-			log.info("No keywords found for recording ID: {}. Cannot generate recommendations.", recordingId);
+		List<String> searchQueries = analysisResults.getKeywordsAndTopics();
+		if (searchQueries.isEmpty()) {
+			log.info("No search queries found for recording ID: {}. Cannot generate recommendations.", recordingId);
 			return Collections.emptyList();
 		}
-		log.debug("Keywords extracted for recording ID {}: {}", recordingId, keywords);
+		log.debug("Search queries extracted for recording ID {}: {}", recordingId, searchQueries);
 
-		List<String> enhancedKeywords = enhanceKeywordsWithEducationalContext(keywords);
-
-		if (!enhancedKeywords.isEmpty()) {
-			String firstKeyword = enhancedKeywords.get(0);
-			enhancedKeywords.set(0, firstKeyword + " " + TARGET_LANGUAGE);
-			if (enhancedKeywords.size() > 2) {
-				String secondKeyword = enhancedKeywords.get(2);
-				enhancedKeywords.set(2, secondKeyword + " " + TARGET_LANGUAGE);
-			}
-		}
-
-		log.debug("Enhanced keywords for recording ID {}: {}", recordingId, enhancedKeywords);
+		// Queries are now intent-based and complete, so we use them directly.
+		log.debug("Using search queries for recording ID {}: {}", recordingId, searchQueries);
 
 		try {
 			List<SearchResult> youtubeResults = robustTaskExecutor.executeWithInfiniteRetry(recordingId,
 					"searching YouTube videos",
-					() -> youTubeAPIClient.searchVideos(enhancedKeywords, SEARCH_RESULTS_POOL_SIZE));
+					() -> youTubeAPIClient.searchVideos(searchQueries, SEARCH_RESULTS_POOL_SIZE));
 
 			if (youtubeResults.isEmpty()) {
 				log.info(
@@ -168,7 +177,7 @@ public class LearningMaterialRecommenderService {
 			log.info("Retrieved {} potential recommendations from YouTube for recording ID: {}", youtubeResults.size(),
 					recordingId);
 
-			List<SearchResult> filteredResults = filterAndRankResults(youtubeResults, enhancedKeywords);
+			List<SearchResult> filteredResults = filterAndRankResults(youtubeResults, searchQueries);
 
 			List<SearchResult> languageFilteredResults = filterByLanguage(filteredResults);
 			log.info("Filtered to {} relevant results after language filtering for recording ID: {}",
@@ -488,31 +497,9 @@ public class LearningMaterialRecommenderService {
 				}
 			}
 
-			boolean likelyEnglish = true;
-			if (title != null) {
-				String lowerTitle = title.toLowerCase();
-
-				for (String indicator : FOREIGN_LANGUAGE_INDICATORS) {
-					if (lowerTitle.contains(indicator)) {
-						likelyEnglish = false;
-						break;
-					}
-				}
-
-				if (likelyEnglish) {
-					long nonAsciiCount = lowerTitle.chars().filter(c -> c > 127).count();
-					double nonAsciiRatio = lowerTitle.isEmpty() ? 0 : (double) nonAsciiCount / lowerTitle.length();
-					if (nonAsciiRatio > 0.3) {
-						likelyEnglish = false;
-					}
-				}
-			}
-
-			if (!likelyEnglish) {
-				relevanceScore -= 100;
-			} else {
-				relevanceScore += 10;
-			}
+			// Heuristic language checks removed in favor of strict LanguageDetector
+			// filtering upstream
+			relevanceScore += 10;
 
 			LearningRecommendation recommendation = new LearningRecommendation(videoId, title, description,
 					thumbnailUrl, recordingId, relevanceScore, isEducational, channelTitle);
@@ -644,34 +631,13 @@ public class LearningMaterialRecommenderService {
 	}
 
 	private List<String> enhanceKeywordsWithEducationalContext(List<String> originalKeywords) {
-		if (originalKeywords == null || originalKeywords.isEmpty()) {
+		// With the new prompt logic, 'originalKeywords' are actually full, intent-based
+		// search queries.
+		// We return them as-is.
+		if (originalKeywords == null) {
 			return Collections.emptyList();
 		}
-
-		List<String> enhancedKeywords = new ArrayList<>();
-
-		for (String keyword : originalKeywords) {
-			if (keyword.length() < 3)
-				continue;
-
-			enhancedKeywords.add(keyword);
-
-			if (keyword.length() > 5) {
-				enhancedKeywords.add(keyword + " " + EDUCATIONAL_CONTEXT);
-			}
-		}
-
-		if (originalKeywords.size() >= 2) {
-			for (int i = 0; i < originalKeywords.size() - 1 && i < 3; i++) {
-				String k1 = originalKeywords.get(i);
-				for (int j = i + 1; j < originalKeywords.size() && j < i + 3; j++) {
-					String k2 = originalKeywords.get(j);
-					enhancedKeywords.add(k1 + " " + k2 + " " + EDUCATIONAL_CONTEXT);
-				}
-			}
-		}
-
-		return enhancedKeywords;
+		return originalKeywords;
 	}
 
 	private List<SearchResult> filterAndRankResults(List<SearchResult> results, List<String> keywords) {
@@ -737,48 +703,46 @@ public class LearningMaterialRecommenderService {
 			return Collections.emptyList();
 		}
 
+		if (languageDetector == null) {
+			log.warn("Language Detector not initialized. Skipping language filter.");
+			return results;
+		}
+
 		return results.stream().filter(result -> {
 			if (result.getSnippet() == null)
 				return false;
 
-			String title = result.getSnippet().getTitle() != null ? result.getSnippet().getTitle().toLowerCase() : "";
+			String title = result.getSnippet().getTitle() != null ? result.getSnippet().getTitle() : "";
 			String description = result.getSnippet().getDescription() != null
-					? result.getSnippet().getDescription().toLowerCase()
-					: "";
-			String channelTitle = result.getSnippet().getChannelTitle() != null
-					? result.getSnippet().getChannelTitle().toLowerCase()
+					? result.getSnippet().getDescription()
 					: "";
 
-			for (String indicator : FOREIGN_LANGUAGE_INDICATORS) {
-				if (title.contains(indicator) || channelTitle.contains(indicator)) {
-					log.debug("Filtering out likely non-English video: {} ({})", title, indicator);
-					return false;
-				}
-			}
+			String textToAnalyze = (title + " " + description).trim();
 
-			for (String region : NON_ENGLISH_REGIONS) {
-				String regex = "\\b" + region + "\\b";
-				if (title.matches(".*" + regex + ".*") || channelTitle.matches(".*" + regex + ".*")
-						|| description.matches(".*" + regex + ".*")) {
-					log.debug("Filtering out likely non-English region video: {} ({})", title, region);
-					return false;
-				}
-			}
-
-			long nonAsciiCount = title.chars().filter(c -> c > 127).count();
-			double nonAsciiRatio = title.isEmpty() ? 0 : (double) nonAsciiCount / title.length();
-
-			if (nonAsciiRatio > 0.3) {
-				log.debug("Filtering out likely non-English video due to high non-ASCII ratio: {}", title);
+			if (textToAnalyze.isEmpty()) {
 				return false;
 			}
 
-			if (channelTitle.contains("official") && nonAsciiRatio > 0.1) {
-				log.debug("Filtering out likely non-English official channel: {}", channelTitle);
+			try {
+				TextObject textObject = textObjectFactory.forText(textToAnalyze);
+				Optional<LdLocale> language = languageDetector.detect(textObject);
+
+				if (language.isPresent()) {
+					if (language.get().getLanguage().equals("en")) {
+						return true;
+					} else {
+						log.debug("Filtered out non-English video: {} (Detected: {})", title,
+								language.get().getLanguage());
+						return false;
+					}
+				} else {
+					log.debug("Filtered out video with undetected language: {}", title);
+					return false;
+				}
+			} catch (Exception e) {
+				log.warn("Language detection error for video {}: {}", title, e.getMessage());
 				return false;
 			}
-
-			return true;
 		}).collect(Collectors.toList());
 	}
 }

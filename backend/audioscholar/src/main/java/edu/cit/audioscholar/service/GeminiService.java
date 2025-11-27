@@ -325,7 +325,7 @@ public class GeminiService {
 		properties.put("keyPoints", Map.of("type", "ARRAY", "items", Map.of("type", "STRING"), "description",
 				"List of distinct key points or action items."));
 		properties.put("topics", Map.of("type", "ARRAY", "items", Map.of("type", "STRING"), "description",
-				"List of main topics or keywords (3-5 items)."));
+				"Generate 3 distinct, intent-based YouTube search queries that would help a student understand these topics in depth."));
 		Map<String, Object> glossaryItemProperties = new LinkedHashMap<>();
 		glossaryItemProperties.put("term",
 				Map.of("type", "STRING", "description", "The specific term identified from the audio transcript."));
@@ -626,7 +626,7 @@ public class GeminiService {
 						{
 						  "summaryText": "Your markdown summary here",
 						  "keyPoints": ["key point 1", "key point 2", ...],
-						  "topics": ["topic 1", "topic 2", ...],
+						  "topics": ["search query 1", "search query 2", "search query 3"],
 						  "glossary": [
 						    {"term": "term1", "definition": "definition1"},
 						    {"term": "term2", "definition": "definition2"},
@@ -787,7 +787,7 @@ public class GeminiService {
 				Analyze the provided lecture transcript and the accompanying PDF document.
 				Generate a comprehensive, concise, well-structured summary incorporating information from BOTH sources, using Markdown in the `summaryText` field. Use headings (##) for main sections and bullet points (* or -) for details. Focus on core arguments, findings, definitions, and conclusions presented in either the transcript or the document.
 				Identify the main key points or action items discussed across both sources and list them as distinct strings in the `keyPoints` array.
-				List the 3-5 most important topics or keywords suitable for searching related content based on both sources in the `topics` array.
+				Generate 3 distinct, intent-based YouTube search queries that would help a student understand these topics in depth, and output them in the `topics` array.
 				Identify important **terms, concepts, acronyms, proper nouns (people, places, organizations mentioned), and technical vocabulary** discussed in either the transcript or the document. For each, provide a concise definition relevant to the context. Structure this as an array of objects in the `glossary` field, where each object has a `term` (string) and a `definition` (string). Aim for comprehensive coverage of potentially unfamiliar items for a learner.
 				Ensure the entire output strictly adheres to the provided JSON schema. Output only the JSON object.
 				""";
@@ -1137,7 +1137,7 @@ public class GeminiService {
 				Analyze the provided lecture transcript carefully.
 				Generate a comprehensive, concise, well-structured summary in Markdown in the `summaryText` field. Use headings (##) for main sections and bullet points (* or -) for details. Focus on core arguments, findings, definitions, and conclusions presented in the transcript.
 				Identify the main key points or action items discussed and list them as distinct strings in the `keyPoints` array.
-				List the 3-5 most important topics or keywords suitable for searching related content in the `topics` array.
+				Generate 3 distinct, intent-based YouTube search queries that would help a student understand these topics in depth, and output them in the `topics` array.
 				Identify important **terms, concepts, acronyms, proper nouns (people, places, organizations mentioned), and technical vocabulary** discussed in the transcript. For each, provide a concise definition relevant to the context. Structure this as an array of objects in the `glossary` field, where each object has a `term` (string) and a `definition` (string). Aim for comprehensive coverage of potentially unfamiliar items for a learner.
 				Stay strictly within the boundaries of what is explicitly mentioned in the transcript. Do not add external information, assumptions, or hallucinations.
 				Ensure the entire output strictly adheres to the provided JSON schema. Output only the JSON object.
