@@ -603,7 +603,18 @@ class AuthRepositoryImpl @Inject constructor(
 
             if (response.isSuccessful) {
                 Log.i(TAG_AUTH_REPO, "User role updated successfully to: $role")
-                // Refresh user profile to reflect the new role locally
+
+                // Optimistic update: Update local cache immediately
+                val currentProfile = userDataStore.userProfileFlow.first()
+                if (currentProfile != null) {
+                    val currentRoles = currentProfile.roles.orEmpty().toMutableSet()
+                    currentRoles.add(role)
+                    val updatedProfile = currentProfile.copy(roles = currentRoles.toList())
+                    userDataStore.saveUserProfile(updatedProfile)
+                    Log.d(TAG_AUTH_REPO, "Optimistically updated local user profile with role: $role")
+                }
+
+                // Refresh user profile to reflect the new role locally from server
                 val profileResponse = apiService.getUserProfile()
                 if (profileResponse.isSuccessful && profileResponse.body() != null) {
                     userDataStore.saveUserProfile(profileResponse.body()!!)

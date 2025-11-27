@@ -17,6 +17,7 @@ interface ApiService {
         @Part("description") description: RequestBody?
     ): Response<AudioMetadataDto>
 
+    @Headers("Cache-Control: no-cache")
     @GET("/api/audio/metadata")
     suspend fun getAudioMetadataList(): Response<List<AudioMetadataDto>>
 

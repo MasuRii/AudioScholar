@@ -86,6 +86,9 @@ class RecordingDetailsViewModel @Inject constructor(
     private val _navigationEvent = Channel<NavigationEvent>(Channel.BUFFERED)
     val navigationEvent: Flow<NavigationEvent> = _navigationEvent.receiveAsFlow()
 
+    private val _recordingUpdatedEvent = Channel<Unit>(Channel.BUFFERED)
+    val recordingUpdatedEvent: Flow<Unit> = _recordingUpdatedEvent.receiveAsFlow()
+
     private val localFilePath: String? = savedStateHandle.get<String>(Screen.RecordingDetails.ARG_LOCAL_FILE_PATH)
     private val cloudId: String? = savedStateHandle.get<String>(Screen.RecordingDetails.ARG_CLOUD_ID)
     private val cloudRecordingId: String? = savedStateHandle.get<String>(Screen.RecordingDetails.ARG_CLOUD_RECORDING_ID)
@@ -672,6 +675,7 @@ class RecordingDetailsViewModel @Inject constructor(
                                     currentMetadata = updatedMetaWithId
                                     Log.i("DetailsViewModel", "Successfully saved remoteRecordingId to local metadata.")
                                     _uiState.update { it.copy(remoteRecordingId = newRemoteId) }
+                                    viewModelScope.launch { _recordingUpdatedEvent.trySend(Unit) }
                                     listenForProcessingCompletion(newRemoteId, fetchSummary = true, fetchRecs = true)
                                 } else {
                                     Log.e("DetailsViewModel", "Failed to save remoteRecordingId to local metadata.")
@@ -785,10 +789,10 @@ class RecordingDetailsViewModel @Inject constructor(
 
     fun onCopySummaryAndNotes() {
         val state = _uiState.value
-        if (state.summaryStatus == SummaryStatus.READY && (state.summaryText.isNotEmpty() || state.glossaryItems.isNotEmpty())) {
+        if (state.summaryStatus == SummaryStatus.READY && (state.summaryText.isNotEmpty() || state.keyPoints.isNotEmpty())) {
             val summaryPart = "Summary:\n${state.summaryText.ifBlank { "Not available" }}\n\n"
-            val notesPart = "AI Notes (Glossary):\n" +
-                    state.glossaryItems.joinToString("\n") { "- ${it.term ?: "Term N/A"}: ${it.definition ?: "Definition N/A"}" }.ifEmpty { "Not available" }
+            val notesPart = "Key Points:\n" +
+                    state.keyPoints.joinToString("\n") { "- $it" }.ifEmpty { "Not available" }
 
             val combinedText = summaryPart + notesPart
             Log.d("DetailsViewModel", "Copy Summary & Notes clicked. Text prepared.")
@@ -1072,6 +1076,7 @@ class RecordingDetailsViewModel @Inject constructor(
                                         )
                                     }
                                     viewModelScope.launch { _infoMessageEvent.trySend("Details updated successfully") }
+                                    viewModelScope.launch { _recordingUpdatedEvent.trySend(Unit) }
                                 }.onFailure { e ->
                                     val errorMsg = mapErrorToUserFriendlyMessage(e)
                                     _uiState.update { it.copy(isUpdatingDetails = false, error = errorMsg) }

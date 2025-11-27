@@ -321,18 +321,28 @@ class RemoteAudioRepositoryImpl @Inject constructor(
                 Log.i(TAG_REMOTE_REPO, "Successfully fetched ${recommendations.size} recommendations for recordingId: $recordingId")
                 emit(Result.success(recommendations))
             } else {
-                val errorBody = response.errorBody()?.string()
-                Log.e(TAG_REMOTE_REPO, "Failed to fetch recommendations: ${response.code()} - $errorBody")
-                val exception = mapHttpException("fetch recommendations", response.code(), errorBody, HttpException(response))
-                emit(Result.failure(exception))
+                if (response.code() == 404) {
+                    Log.i(TAG_REMOTE_REPO, "Recommendations not found (404), returning empty list for recordingId: $recordingId")
+                    emit(Result.success(emptyList()))
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    Log.e(TAG_REMOTE_REPO, "Failed to fetch recommendations: ${response.code()} - $errorBody")
+                    val exception = mapHttpException("fetch recommendations", response.code(), errorBody, HttpException(response))
+                    emit(Result.failure(exception))
+                }
             }
         } catch (e: IOException) {
             Log.e(TAG_REMOTE_REPO, "Network/IO exception fetching recommendations: ${e.message}", e)
             emit(Result.failure(IOException(application.getString(R.string.upload_error_network_connection), e)))
         } catch (e: HttpException) {
-            Log.e(TAG_REMOTE_REPO, "HTTP exception fetching recommendations: ${e.code()} - ${e.message()}", e)
-            val exception = mapHttpException("fetch recommendations", e.code(), e.message(), e)
-            emit(Result.failure(exception))
+            if (e.code() == 404) {
+                Log.i(TAG_REMOTE_REPO, "Recommendations not found (404 exception), returning empty list for recordingId: $recordingId")
+                emit(Result.success(emptyList()))
+            } else {
+                Log.e(TAG_REMOTE_REPO, "HTTP exception fetching recommendations: ${e.code()} - ${e.message()}", e)
+                val exception = mapHttpException("fetch recommendations", e.code(), e.message(), e)
+                emit(Result.failure(exception))
+            }
         } catch (e: Exception) {
             Log.e(TAG_REMOTE_REPO, "Unexpected exception fetching recommendations: ${e.message}", e)
             emit(Result.failure(IOException(application.getString(R.string.upload_error_unexpected, e.message ?: "Unknown error"), e)))

@@ -35,6 +35,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -119,6 +121,13 @@ fun RecordingDetailsScreen(
     LaunchedEffect(Unit) {
         viewModel.openUrlEvent.collect { url ->
             openUrl(context, url)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.recordingUpdatedEvent.collect {
+            Log.d("RecordingDetailsScreen", "Recording updated/uploaded. Setting refresh_needed_cloud=true")
+            navController.previousBackStackEntry?.savedStateHandle?.set("refresh_needed_cloud", true)
         }
     }
 
@@ -379,7 +388,7 @@ fun RecordingDetailsScreen(
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 modifier = Modifier.fillMaxWidth()
                                             )
-                                            if (uiState.summaryText.isNotEmpty() || uiState.glossaryItems.isNotEmpty()) {
+                                            if (uiState.summaryText.isNotEmpty() || uiState.keyPoints.isNotEmpty()) {
                                                 Spacer(modifier = Modifier.height(12.dp))
                                                 Button(
                                                     onClick = viewModel::onCopySummaryAndNotes,
@@ -438,12 +447,22 @@ fun RecordingDetailsScreen(
                                             }
                                         }
                                         SummaryStatus.READY -> {
-                                            if (uiState.glossaryItems.isNotEmpty()) {
+                                            if (uiState.keyPoints.isNotEmpty()) {
                                                 Column {
-                                                    uiState.glossaryItems.forEachIndexed { index, item ->
-                                                        GlossaryItemView(item = item)
-                                                        if (index < uiState.glossaryItems.lastIndex) {
-                                                            Spacer(modifier = Modifier.height(8.dp))
+                                                    uiState.keyPoints.forEachIndexed { index, point ->
+                                                        Row(modifier = Modifier.fillMaxWidth()) {
+                                                            Text(
+                                                                text = "•",
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                modifier = Modifier.padding(end = 8.dp)
+                                                            )
+                                                            Text(
+                                                                text = point,
+                                                                style = MaterialTheme.typography.bodyMedium
+                                                            )
+                                                        }
+                                                        if (index < uiState.keyPoints.lastIndex) {
+                                                            Spacer(modifier = Modifier.height(4.dp))
                                                         }
                                                     }
                                                 }
@@ -765,22 +784,6 @@ fun RecordingDetailsScreen(
 
 
 @Composable
-fun GlossaryItemView(item: GlossaryItemDto) {
-    Column {
-        Text(
-            buildAnnotatedString {
-                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                    append(item.term ?: "Unknown Term")
-                }
-                append(": ")
-                append(item.definition ?: "No definition available.")
-            },
-            style = MaterialTheme.typography.bodyMedium
-        )
-    }
-}
-
-@Composable
 fun YouTubeRecommendationCard(
     video: RecommendationDto,
     onClick: () -> Unit,
@@ -857,6 +860,7 @@ fun YouTubeRecommendationCard(
         }
     }
 }
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryEditDialog(
     initialSummary: String,
@@ -865,50 +869,130 @@ fun SummaryEditDialog(
     onConfirm: (String, List<String>) -> Unit
 ) {
     var summary by remember { mutableStateOf(initialSummary) }
-    // Join key points with newlines for editing
-    var keyPointsText by remember { mutableStateOf(initialKeyPoints.joinToString("\n")) }
+    // Use snapshot state list for reactive inline editing
+    val keyPoints = remember { mutableStateListOf(*initialKeyPoints.toTypedArray()) }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text("Edit Summary Content") },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("Summary", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Edit Summary Content") },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Filled.Close, contentDescription = "Cancel")
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = {
+                            // Filter out blank lines before saving
+                            val cleanedKeyPoints = keyPoints.map { it.trim() }.filter { it.isNotEmpty() }
+                            onConfirm(summary, cleanedKeyPoints)
+                        }) {
+                            Text("Save", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Summary Section
+                Text(
+                    text = "Summary",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
                 OutlinedTextField(
                     value = summary,
                     onValueChange = { summary = it },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
-                    textStyle = MaterialTheme.typography.bodySmall
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 120.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    label = { Text("Summary Text") },
+                    minLines = 5
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                Text("Key Points (one per line)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                OutlinedTextField(
-                    value = keyPointsText,
-                    onValueChange = { keyPointsText = it },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
-                    textStyle = MaterialTheme.typography.bodySmall
+                // Key Points Section
+                Text(
+                    text = "Key Points",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    // Split key points by newline and filter empty
-                    val updatedKeyPoints = keyPointsText.split("\n")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                    onConfirm(summary, updatedKeyPoints)
+
+                if (keyPoints.isEmpty()) {
+                    Text(
+                        text = "No key points added yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
                 }
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+
+                keyPoints.forEachIndexed { index, point ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = point,
+                            onValueChange = { keyPoints[index] = it },
+                            modifier = Modifier.weight(1f),
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                            placeholder = { Text("Key point...") },
+                            trailingIcon = {
+                                if (point.isNotEmpty()) {
+                                    IconButton(onClick = { keyPoints[index] = "" }) {
+                                        Icon(Icons.Filled.Clear, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                        )
+                        IconButton(
+                            onClick = { keyPoints.removeAt(index) },
+                            modifier = Modifier.padding(start = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "Delete item",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+
+                // Add Button
+                Button(
+                    onClick = { keyPoints.add("") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add Key Point")
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
-    )
+    }
 }
