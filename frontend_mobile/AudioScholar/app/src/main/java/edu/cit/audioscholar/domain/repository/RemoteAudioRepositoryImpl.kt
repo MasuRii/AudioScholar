@@ -365,6 +365,102 @@ class RemoteAudioRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
+    override fun updateRecordingDetails(
+        recordingId: String,
+        title: String?,
+        description: String?
+    ): Flow<Result<AudioMetadataDto>> = flow {
+        try {
+            Log.d(TAG_REMOTE_REPO, "Updating recording details for ID: $recordingId")
+            val request = UpdateRecordingRequest(title = title, description = description)
+            val response = apiService.updateRecordingDetails(recordingId, request)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Log.i(TAG_REMOTE_REPO, "Successfully updated recording details for ID: $recordingId")
+                emit(Result.success(response.body()!!))
+            } else {
+                val errorBody = response.errorBody()?.string() ?: application.getString(R.string.upload_error_server_generic)
+                Log.e(TAG_REMOTE_REPO, "Failed to update recording details: ${response.code()} - $errorBody")
+                val exception = mapHttpException("update recording", response.code(), errorBody, HttpException(response))
+                emit(Result.failure(exception))
+            }
+        } catch (e: IOException) {
+            Log.e(TAG_REMOTE_REPO, "Network/IO exception updating recording details: ${e.message}", e)
+            emit(Result.failure(IOException(application.getString(R.string.upload_error_network_connection), e)))
+        } catch (e: HttpException) {
+            Log.e(TAG_REMOTE_REPO, "HTTP exception updating recording details: ${e.code()} - ${e.message()}", e)
+            val exception = mapHttpException("update recording", e.code(), e.message(), e)
+            emit(Result.failure(exception))
+        } catch (e: Exception) {
+            Log.e(TAG_REMOTE_REPO, "Unexpected exception updating recording details: ${e.message}", e)
+            emit(Result.failure(IOException(application.getString(R.string.upload_error_unexpected, e.message ?: "Unknown error"), e)))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    override fun updateSummary(
+        summaryId: String,
+        newContent: String,
+        keyPoints: List<String>?,
+        glossary: List<GlossaryItemDto>?
+    ): Flow<Result<SummaryResponseDto>> = flow {
+        try {
+            Log.d(TAG_REMOTE_REPO, "Updating summary for ID: $summaryId")
+            val request = UpdateSummaryRequest(
+                formattedSummaryText = newContent,
+                keyPoints = keyPoints,
+                glossary = glossary
+            )
+            val response = apiService.updateSummary(summaryId, request)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Log.i(TAG_REMOTE_REPO, "Successfully updated summary for ID: $summaryId")
+                emit(Result.success(response.body()!!))
+            } else {
+                val errorBody = response.errorBody()?.string() ?: application.getString(R.string.upload_error_server_generic)
+                Log.e(TAG_REMOTE_REPO, "Failed to update summary: ${response.code()} - $errorBody")
+                val exception = mapHttpException("update summary", response.code(), errorBody, HttpException(response))
+                emit(Result.failure(exception))
+            }
+        } catch (e: IOException) {
+            Log.e(TAG_REMOTE_REPO, "Network/IO exception updating summary: ${e.message}", e)
+            emit(Result.failure(IOException(application.getString(R.string.upload_error_network_connection), e)))
+        } catch (e: HttpException) {
+            Log.e(TAG_REMOTE_REPO, "HTTP exception updating summary: ${e.code()} - ${e.message()}", e)
+            val exception = mapHttpException("update summary", e.code(), e.message(), e)
+            emit(Result.failure(exception))
+        } catch (e: Exception) {
+            Log.e(TAG_REMOTE_REPO, "Unexpected exception updating summary: ${e.message}", e)
+            emit(Result.failure(IOException(application.getString(R.string.upload_error_unexpected, e.message ?: "Unknown error"), e)))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    override fun dismissRecommendation(recommendationId: String): Flow<Result<Unit>> = flow {
+        try {
+            Log.d(TAG_REMOTE_REPO, "Dismissing recommendation with ID: $recommendationId")
+            val response = apiService.dismissRecommendation(recommendationId)
+            
+            if (response.isSuccessful) {
+                Log.i(TAG_REMOTE_REPO, "Successfully dismissed recommendation ID: $recommendationId")
+                emit(Result.success(Unit))
+            } else {
+                val errorBody = response.errorBody()?.string() ?: application.getString(R.string.upload_error_server_generic)
+                Log.e(TAG_REMOTE_REPO, "Failed to dismiss recommendation: ${response.code()} - $errorBody")
+                val exception = mapHttpException("dismiss recommendation", response.code(), errorBody, HttpException(response))
+                emit(Result.failure(exception))
+            }
+        } catch (e: IOException) {
+            Log.e(TAG_REMOTE_REPO, "Network/IO exception dismissing recommendation: ${e.message}", e)
+            emit(Result.failure(IOException(application.getString(R.string.upload_error_network_connection), e)))
+        } catch (e: HttpException) {
+            Log.e(TAG_REMOTE_REPO, "HTTP exception dismissing recommendation: ${e.code()} - ${e.message()}", e)
+            val exception = mapHttpException("dismiss recommendation", e.code(), e.message(), e)
+            emit(Result.failure(exception))
+        } catch (e: Exception) {
+            Log.e(TAG_REMOTE_REPO, "Unexpected exception dismissing recommendation: ${e.message}", e)
+            emit(Result.failure(IOException(application.getString(R.string.upload_error_unexpected, e.message ?: "Unknown error"), e)))
+        }
+    }.flowOn(Dispatchers.IO)
+
     override fun deleteCloudRecording(metadataId: String): Flow<Result<Unit>> = flow {
         try {
             Log.d(TAG_REMOTE_REPO, "Attempting to delete cloud recording metadata with ID: $metadataId")

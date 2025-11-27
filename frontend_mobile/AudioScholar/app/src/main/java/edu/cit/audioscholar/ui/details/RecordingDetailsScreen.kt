@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,24 +49,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import edu.cit.audioscholar.ui.details.NavigationEvent
 import edu.cit.audioscholar.ui.main.Screen
-
-private fun getFileNameFromUri(contentResolver: ContentResolver, uri: Uri): String? {
-    var fileName: String? = null
-    try {
-        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (nameIndex != -1) {
-                    fileName = cursor.getString(nameIndex)
-                }
-            }
-        }
-    } catch (e: Exception) {
-        Log.e("FileNameHelper", "Error getting filename from URI: $uri", e)
-        fileName = "Error_Fetching_Name"
-    }
-    return fileName
-}
 
 private fun openUrl(context: Context, url: String) {
     try {
@@ -90,7 +73,6 @@ fun RecordingDetailsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val contentResolver = context.contentResolver
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -181,6 +163,13 @@ fun RecordingDetailsScreen(
                 },
                 actions = {
                     if ((uiState.filePath.isNotEmpty() || uiState.remoteRecordingId != null) && !uiState.isDeleting) {
+                        IconButton(onClick = viewModel::openEditDialog) {
+                            Icon(
+                                imageVector = Icons.Filled.Edit,
+                                contentDescription = "Edit details",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         IconButton(onClick = viewModel::requestDelete) {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
@@ -222,60 +211,21 @@ fun RecordingDetailsScreen(
                             .verticalScroll(rememberScrollState())
                             .padding(16.dp)
                     ) {
-                        val focusRequester = remember { FocusRequester() }
-                        val focusManager = LocalFocusManager.current
-
                         Box {
-                            if (uiState.isEditingTitle) {
-                                BasicTextField(
-                                    value = uiState.editableTitle,
-                                    onValueChange = viewModel::onTitleChanged,
-                                    textStyle = MaterialTheme.typography.headlineSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = LocalContentColor.current
-                                    ),
-                                    keyboardOptions = KeyboardOptions(
-                                        capitalization = KeyboardCapitalization.Sentences,
-                                        imeAction = ImeAction.Done
-                                    ),
-                                    keyboardActions = KeyboardActions(
-                                        onDone = {
-                                            viewModel.onTitleSaveRequested()
-                                            focusManager.clearFocus()
-                                        }
-                                    ),
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .focusRequester(focusRequester)
-                                        .onFocusChanged { }
+                            Column {
+                                Text(
+                                    text = uiState.title,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
-                                LaunchedEffect(Unit) {
-                                    focusRequester.requestFocus()
-                                }
-                            } else {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (uiState.description.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = uiState.title,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.weight(1f)
+                                        text = uiState.description,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = LocalContentColor.current.copy(alpha = 0.8f)
                                     )
-                                    if (!uiState.isProcessing && !uiState.isDeleting) {
-                                        if (!uiState.isCloudSource) {
-                                            IconButton(
-                                                onClick = viewModel::onTitleEditRequested,
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Icon(
-                                                    Icons.Filled.Edit,
-                                                    contentDescription = "Edit title",
-                                                    modifier = Modifier.size(20.dp),
-                                                    tint = MaterialTheme.colorScheme.primary
-                                                )
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -362,7 +312,27 @@ fun RecordingDetailsScreen(
 
                         if (uiState.showCloudInfo || uiState.summaryStatus != SummaryStatus.IDLE) {
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(stringResource(R.string.details_summary_title), style = MaterialTheme.typography.titleMedium)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(stringResource(R.string.details_summary_title), style = MaterialTheme.typography.titleMedium)
+
+                                if (uiState.summaryStatus == SummaryStatus.READY && !uiState.isProcessing) {
+                                    IconButton(
+                                        onClick = viewModel::openSummaryEditDialog,
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Edit,
+                                            contentDescription = "Edit Summary",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
 
                             if (uiState.summaryStatus != SummaryStatus.IDLE) {
@@ -626,7 +596,15 @@ fun RecordingDetailsScreen(
                                             contentPadding = PaddingValues(horizontal = 4.dp)
                                         ) {
                                             items(items = uiState.youtubeRecommendations, key = { it.recommendationId ?: it.videoId ?: it.hashCode() }) { video ->
-                                                YouTubeRecommendationCard(video = video, onClick = { viewModel.onWatchYouTubeVideo(video) })
+                                                YouTubeRecommendationCard(
+                                                    video = video,
+                                                    onClick = { viewModel.onWatchYouTubeVideo(video) },
+                                                    onDismiss = {
+                                                        video.recommendationId?.let { id ->
+                                                            viewModel.dismissRecommendation(id)
+                                                        }
+                                                    }
+                                                )
                                             }
                                         }
                                     } else {
@@ -728,6 +706,60 @@ fun RecordingDetailsScreen(
             )
         }
 
+        if (uiState.showSummaryEditDialog) {
+            SummaryEditDialog(
+                initialSummary = uiState.summaryText,
+                initialKeyPoints = uiState.keyPoints,
+                onDismiss = viewModel::closeSummaryEditDialog,
+                onConfirm = { summary, keyPoints ->
+                    viewModel.updateSummaryContent(summary, keyPoints, uiState.glossaryItems)
+                }
+            )
+        }
+
+        if (uiState.showEditDialog) {
+            var newTitle by remember { mutableStateOf(uiState.title) }
+            var newDescription by remember { mutableStateOf(uiState.description) }
+
+            AlertDialog(
+                onDismissRequest = viewModel::closeEditDialog,
+                title = { Text("Edit Details") },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = newTitle,
+                            onValueChange = { newTitle = it },
+                            label = { Text("Title") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = newDescription,
+                            onValueChange = { newDescription = it },
+                            label = { Text("Description") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                            maxLines = 5
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.updateRecordingDetails(newTitle, newDescription)
+                        }
+                    ) {
+                        Text("Save")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = viewModel::closeEditDialog) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
     }
 }
 
@@ -751,54 +783,132 @@ fun GlossaryItemView(item: GlossaryItemDto) {
 @Composable
 fun YouTubeRecommendationCard(
     video: RecommendationDto,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDismiss: () -> Unit
 ) {
     var imageUrl by remember { mutableStateOf(video.thumbnailUrl) }
     var attemptFallback by remember { mutableStateOf(true) }
 
-    Card(
-        modifier = Modifier
-            .width(180.dp)
-            .height(IntrinsicSize.Min)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Box(modifier = Modifier
+        .width(180.dp)
+        .height(IntrinsicSize.Min)
     ) {
-        Column {
-            AsyncImage(
-                model = imageUrl,
-                contentDescription = video.title ?: "YouTube video thumbnail",
-                modifier = Modifier
-                    .height(100.dp)
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.medium),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(id = R.drawable.ic_youtubeplaceholder_quantum),
-                error = painterResource(id = R.drawable.ic_youtubeplaceholder_quantum),
-                onError = {
-                    if (attemptFallback && !video.fallbackThumbnailUrl.isNullOrBlank()) {
-                        imageUrl = video.fallbackThumbnailUrl
-                        attemptFallback = false
+        Card(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(onClick = onClick),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = video.title ?: "YouTube video thumbnail",
+                    modifier = Modifier
+                        .height(100.dp)
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium),
+                    contentScale = ContentScale.Crop,
+                    placeholder = painterResource(id = R.drawable.ic_youtubeplaceholder_quantum),
+                    error = painterResource(id = R.drawable.ic_youtubeplaceholder_quantum),
+                    onError = {
+                        if (attemptFallback && !video.fallbackThumbnailUrl.isNullOrBlank()) {
+                            imageUrl = video.fallbackThumbnailUrl
+                            attemptFallback = false
+                        }
+                    },
+                    onSuccess = {
+                        if (imageUrl == video.thumbnailUrl) {
+                            attemptFallback = true
+                        }
                     }
-                },
-                onSuccess = {
-                    if (imageUrl == video.thumbnailUrl) {
-                        attemptFallback = true
-                    }
+                )
+                Column(modifier = Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    Text(
+                        text = video.title ?: "No Title",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-            )
-            Column(modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
-                verticalArrangement = Arrangement.Top
+            }
+        }
+
+        if (video.recommendationId != null) {
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                    .size(24.dp)
+                    .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
             ) {
-                Text(
-                    text = video.title ?: "No Title",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Dismiss",
+                    tint = Color.White,
+                    modifier = Modifier.padding(4.dp)
                 )
             }
         }
     }
+}
+@Composable
+fun SummaryEditDialog(
+    initialSummary: String,
+    initialKeyPoints: List<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (String, List<String>) -> Unit
+) {
+    var summary by remember { mutableStateOf(initialSummary) }
+    // Join key points with newlines for editing
+    var keyPointsText by remember { mutableStateOf(initialKeyPoints.joinToString("\n")) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Summary Content") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text("Summary", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = summary,
+                    onValueChange = { summary = it },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Key Points (one per line)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                OutlinedTextField(
+                    value = keyPointsText,
+                    onValueChange = { keyPointsText = it },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 100.dp, max = 200.dp),
+                    textStyle = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    // Split key points by newline and filter empty
+                    val updatedKeyPoints = keyPointsText.split("\n")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                    onConfirm(summary, updatedKeyPoints)
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
