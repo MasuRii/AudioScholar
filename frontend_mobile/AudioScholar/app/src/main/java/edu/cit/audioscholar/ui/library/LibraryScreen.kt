@@ -345,7 +345,10 @@ fun LibraryScreen(
                     )
                     1 -> CloudRecordingsTabPage(
                         uiState = uiState,
+                        selectedIds = uiState.selectedRecordingIds,
+                        isMultiSelectActive = uiState.isMultiSelectActive,
                         onItemClick = { metadataDto -> viewModel.onRecordingClicked(metadataDto) },
+                        onItemLongClick = { id -> viewModel.enterMultiSelectMode(id) },
                         isLoading = uiState.isLoadingCloud,
                         navController = navController,
                         context = context,
@@ -465,7 +468,10 @@ fun LocalRecordingsTabPage(
 @Composable
 fun CloudRecordingsTabPage(
     uiState: LibraryUiState,
+    selectedIds: Set<String>,
+    isMultiSelectActive: Boolean,
     onItemClick: (AudioMetadataDto) -> Unit,
+    onItemLongClick: (String) -> Unit,
     isLoading: Boolean,
     navController: NavHostController,
     context: Context,
@@ -488,12 +494,16 @@ fun CloudRecordingsTabPage(
             ) {
                 items(
                     uiState.cloudRecordings,
-                    key = { it.recordingId ?: it.id ?: it.fileName ?: it.hashCode() }
+                    key = { it.id ?: it.recordingId ?: it.fileName ?: it.hashCode() }
                 ) { metadataDto ->
+                    val isSelected = metadataDto.id?.let { selectedIds.contains(it) } == true
                     CloudRecordingListItem(
                         metadata = metadataDto,
-                        onItemClick = { clickedMetadataDto ->
-                            onItemClick(clickedMetadataDto)
+                        isMultiSelectActive = isMultiSelectActive,
+                        isSelected = isSelected,
+                        onLongClick = { metadataDto.id?.let { onItemLongClick(it) } },
+                        onItemClick = {
+                            onItemClick(metadataDto)
                         },
                     )
                     HorizontalDivider(thickness = 0.5.dp)
@@ -584,20 +594,49 @@ fun LocalRecordingListItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CloudRecordingListItem(
     metadata: AudioMetadataDto,
-    onItemClick: (metadata: AudioMetadataDto) -> Unit,
+    isMultiSelectActive: Boolean,
+    isSelected: Boolean,
+    onLongClick: () -> Unit,
+    onItemClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptic = LocalHapticFeedback.current
+    val checkboxAreaWidth = 48.dp
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onItemClick(metadata) }
+            .combinedClickable(
+                onClick = onItemClick,
+                onLongClick = {
+                    if (!isMultiSelectActive) {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongClick()
+                    }
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        Box(
+            modifier = Modifier
+                .width(if (isMultiSelectActive) checkboxAreaWidth else 0.dp)
+                .padding(end = if (isMultiSelectActive) 16.dp else 0.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (isMultiSelectActive) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onItemClick() },
+                )
+            }
+        }
+
         Column(modifier = Modifier
             .weight(1f)
             .padding(end = 16.dp)) {

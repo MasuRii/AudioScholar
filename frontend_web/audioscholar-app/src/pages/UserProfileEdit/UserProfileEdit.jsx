@@ -132,6 +132,7 @@ const UserProfileEdit = () => {
       try {
         console.log('Attempting to update profile details (name only)...');
         const updatePayload = { firstName, lastName };
+
         await axios.put(`${API_BASE_URL}api/users/me`, updatePayload, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -139,6 +140,8 @@ const UserProfileEdit = () => {
         setInitialFirstName(firstName);
         setInitialLastName(lastName);
         console.log('Profile details updated successfully.');
+        window.dispatchEvent(new Event('user-profile-updated'));
+
       } catch (err) {
         console.error('Error updating profile details:', err);
         setError(`Failed to update profile details: ${err.response?.data?.message || err.message}`);
@@ -148,6 +151,7 @@ const UserProfileEdit = () => {
 
     if (!errorsOccurred && avatarFile) {
       try {
+
         console.log('Attempting to upload new avatar...');
         const formData = new FormData();
         formData.append('avatar', avatarFile);
@@ -155,6 +159,7 @@ const UserProfileEdit = () => {
         const response = await axios.post(`${API_BASE_URL}api/users/me/avatar`, formData, {
           headers: {
             'Authorization': `Bearer ${token}`,
+
             'Content-Type': 'multipart/form-data'
           }
         });
@@ -165,6 +170,8 @@ const UserProfileEdit = () => {
         setAvatarPreview(null);
         document.getElementById('avatarInput').value = null;
         console.log('Avatar uploaded successfully:', response.data);
+        window.dispatchEvent(new Event('user-profile-updated'));
+
       } catch (err) {
         console.error('Error uploading avatar:', err);
         setError(`Failed to upload avatar: ${err.response?.data?.message || err.message}`);
@@ -218,26 +225,27 @@ const UserProfileEdit = () => {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading form...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">Loading form...</div>;
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
+    <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
       <title>AudioScholar - Edit Profile</title>
       <Header />
 
       <main className="flex-grow flex items-center justify-center py-12">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-lg mx-auto bg-white p-8 md:p-10 rounded-lg shadow-xl">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6">Edit Profile</h1>
+          <div className="max-w-lg mx-auto bg-white dark:bg-gray-800 p-8 md:p-10 rounded-lg shadow-xl transition-colors duration-200">
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">Edit Profile</h1>
 
             <form onSubmit={handleSaveChanges} className="space-y-5">
               <div className="flex flex-col items-center space-y-4 mb-4">
-                <label className="block text-sm font-medium text-gray-700">Profile Picture</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
                 <img
                   src={avatarPreview || currentProfileImageUrl || '/icon-512.png'}
                   alt="Avatar Preview"
-                  className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 shadow-md"
+                  className="w-32 h-32 rounded-full object-cover border-4 border-gray-200 dark:border-gray-600 shadow-md"
+                  onError={(e) => { e.target.onerror = null; e.target.src = '/icon-512.png'; }}
                 />
                 <input
                   type="file"
@@ -249,31 +257,31 @@ const UserProfileEdit = () => {
                 />
                 <label
                   htmlFor="avatarInput"
-                  className={`cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 ${saving ? 'opacity-50 cursor-not-allowed' : ''} transition-colors duration-200`}
                 >
                   Change Picture
                 </label>
               </div>
 
               {successMessage && (
-                <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+                <div className="bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-300 px-4 py-3 rounded relative" role="alert">
                   <span className="block sm:inline">{successMessage}</span>
                 </div>
               )}
 
               {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <div className="bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 px-4 py-3 rounded relative" role="alert">
                   <strong className="font-bold">Error:</strong>
                   <span className="block sm:inline"> {error}</span>
                 </div>
               )}
 
               <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
                 <input
                   type="text"
                   id="firstName"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm dark:bg-gray-700 dark:text-white"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
@@ -282,11 +290,11 @@ const UserProfileEdit = () => {
               </div>
 
               <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
                 <input
                   type="text"
                   id="lastName"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm dark:bg-gray-700 dark:text-white"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   required
@@ -295,11 +303,11 @@ const UserProfileEdit = () => {
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
                 <input
                   type="email"
                   id="email"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
                   value={email}
                   required
                   readOnly
@@ -307,15 +315,15 @@ const UserProfileEdit = () => {
                 />
               </div>
 
-              <div className="border-t border-gray-200 pt-5 mt-5">
-                <h2 className="text-lg font-semibold text-gray-700 mb-3">Change Password</h2>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-5 mt-5 transition-colors duration-200">
+                <h2 className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-3">Change Password</h2>
 
                 <div>
-                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                  <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
                   <input
                     type="password"
                     id="newPassword"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm dark:bg-gray-700 dark:text-white"
                     placeholder="Enter new password (min. 6 chars)"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -324,11 +332,11 @@ const UserProfileEdit = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                  <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm New Password</label>
                   <input
                     type="password"
                     id="confirmPassword"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm"
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 ease-in-out shadow-sm dark:bg-gray-700 dark:text-white"
                     placeholder="Confirm your new password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
@@ -342,7 +350,7 @@ const UserProfileEdit = () => {
                   type="button"
                   onClick={handleCancel}
                   disabled={saving}
-                  className="px-6 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition duration-150 ease-in-out disabled:opacity-50"
+                  className="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 dark:focus:ring-gray-600 transition duration-150 ease-in-out disabled:opacity-50"
                 >
                   Cancel
                 </button>

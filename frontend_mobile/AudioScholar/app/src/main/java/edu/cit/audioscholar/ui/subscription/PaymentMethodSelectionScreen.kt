@@ -6,7 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,9 +22,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import edu.cit.audioscholar.R
+import edu.cit.audioscholar.ui.auth.LegalContent
 import edu.cit.audioscholar.ui.main.Screen
 import edu.cit.audioscholar.ui.theme.AudioScholarTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +37,57 @@ fun PaymentMethodSelectionScreen(
     formattedPrice: String,
     priceAmount: Double
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState()
+    var showLegalSheet by remember { mutableStateOf(false) }
+    var legalSheetTitle by remember { mutableStateOf("") }
+    var legalSheetContent by remember { mutableStateOf("") }
+
+    if (showLegalSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showLegalSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f)
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = legalSheetTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    textAlign = TextAlign.Center
+                )
+                HorizontalDivider()
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 16.dp)
+                ) {
+                    MarkdownText(
+                        markdown = legalSheetContent,
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion { showLegalSheet = false }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                ) {
+                    Text(stringResource(R.string.onboarding_back).replace("Back", "Close"))
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -135,15 +189,23 @@ fun PaymentMethodSelectionScreen(
                     .padding(top = 24.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.Center
             ) {
-                TextButton(onClick = { }) {
+                TextButton(onClick = {
+                    legalSheetTitle = context.getString(R.string.settings_item_terms_service)
+                    legalSheetContent = LegalContent.TERMS_OF_SERVICE
+                    showLegalSheet = true
+                }) {
                     Text(
-                        text = "Terms of Service",
+                        text = stringResource(R.string.settings_item_terms_service),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                TextButton(onClick = { }) {
+                TextButton(onClick = {
+                    legalSheetTitle = context.getString(R.string.settings_item_privacy_policy)
+                    legalSheetContent = LegalContent.PRIVACY_POLICY
+                    showLegalSheet = true
+                }) {
                     Text(
-                        text = "Privacy Policy",
+                        text = stringResource(R.string.settings_item_privacy_policy),
                         style = MaterialTheme.typography.bodySmall
                     )
                 }

@@ -23,6 +23,7 @@ public class ErrorCheckVariationsTest {
 
 		// Case sensitivity - The check is case sensitive!
 		String caps = "{\"Error\":\"msg\",\"Details\":\"det\"}";
+		assertFalse(check(caps), "Caps should fail");
 		// If createErrorResponse used caps, this would fail the check.
 		// But createErrorResponse uses lowercase "error" and "details".
 

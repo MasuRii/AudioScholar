@@ -75,7 +75,7 @@ const UserProfile = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
+    <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900 transition-colors duration-200">
       <title>AudioScholar - Profile</title>
       <Header />
 
@@ -89,6 +89,7 @@ const UserProfile = () => {
                 alt="Profile"
                 className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover mb-5"
                 referrerPolicy="no-referrer"
+                onError={(e) => { e.target.onerror = null; e.target.src = '/icon-512.png'; }}
               />
               <h1 className="text-3xl font-bold mb-1">{`${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'User Name'}</h1>
               <p className="text-indigo-200 mb-4 text-lg">{user?.email || 'email@example.com'}</p>
@@ -99,28 +100,28 @@ const UserProfile = () => {
               )}
             </div>
 
-            <div className="bg-white p-8 md:p-10">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-6">Personal Information</h2>
+            <div className="bg-white dark:bg-gray-800 p-8 md:p-10 transition-colors duration-200">
+              <h2 className="text-2xl font-semibold text-gray-800 dark:text-white mb-6">Personal Information</h2>
 
               <div className="space-y-5">
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">First Name</h3>
-                  <p className="text-gray-800 font-medium text-lg bg-gray-50 p-3 rounded-md border border-gray-200">{user?.firstName || 'N/A'}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">First Name</h3>
+                  <p className="text-gray-800 dark:text-gray-200 font-medium text-lg bg-gray-50 dark:bg-gray-700 p-3 rounded-md border border-gray-200 dark:border-gray-600">{user?.firstName || 'N/A'}</p>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">Last Name</h3>
-                  <p className="text-gray-800 font-medium text-lg bg-gray-50 p-3 rounded-md border border-gray-200">{user?.lastName || 'N/A'}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Last Name</h3>
+                  <p className="text-gray-800 dark:text-gray-200 font-medium text-lg bg-gray-50 dark:bg-gray-700 p-3 rounded-md border border-gray-200 dark:border-gray-600">{user?.lastName || 'N/A'}</p>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">Email</h3>
-                  <p className="text-gray-800 font-medium text-lg bg-gray-50 p-3 rounded-md border border-gray-200">{user?.email || 'N/A'}</p>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Email</h3>
+                  <p className="text-gray-800 dark:text-gray-200 font-medium text-lg bg-gray-50 dark:bg-gray-700 p-3 rounded-md border border-gray-200 dark:border-gray-600">{user?.email || 'N/A'}</p>
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">Subscription Status</h3>
-                  <p className="text-gray-800 font-medium text-lg bg-gray-50 p-3 rounded-md border border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Subscription Status</h3>
+                  <p className="text-gray-800 dark:text-gray-200 font-medium text-lg bg-gray-50 dark:bg-gray-700 p-3 rounded-md border border-gray-200 dark:border-gray-600">
                     {user?.roles?.includes('ROLE_PREMIUM') ? 'Premium' : 'Basic'}
                   </p>
                 </div>

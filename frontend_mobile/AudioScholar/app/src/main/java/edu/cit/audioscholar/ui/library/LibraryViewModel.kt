@@ -164,14 +164,14 @@ class LibraryViewModel @Inject constructor(
     }
 
 
-    fun enterMultiSelectMode(initialFilePath: String) {
+    fun enterMultiSelectMode(initialId: String) {
         _uiState.update {
             it.copy(
                 isMultiSelectActive = true,
-                selectedRecordingIds = setOf(initialFilePath)
+                selectedRecordingIds = setOf(initialId)
             )
         }
-        Log.d("LibraryViewModel", "Entered multi-select mode, selected: $initialFilePath")
+        Log.d("LibraryViewModel", "Entered multi-select mode, selected: $initialId")
     }
 
     fun exitMultiSelectMode() {
@@ -184,13 +184,13 @@ class LibraryViewModel @Inject constructor(
         Log.d("LibraryViewModel", "Exited multi-select mode")
     }
 
-    fun toggleSelection(filePath: String) {
+    fun toggleSelection(id: String) {
         _uiState.update { currentState ->
             val currentSelection = currentState.selectedRecordingIds
-            val newSelection = if (currentSelection.contains(filePath)) {
-                currentSelection - filePath
+            val newSelection = if (currentSelection.contains(id)) {
+                currentSelection - id
             } else {
-                currentSelection + filePath
+                currentSelection + id
             }
             val exitMode = newSelection.isEmpty() && currentState.isMultiSelectActive
             currentState.copy(
@@ -198,7 +198,7 @@ class LibraryViewModel @Inject constructor(
                 isMultiSelectActive = !exitMode
             )
         }
-        Log.d("LibraryViewModel", "Toggled selection for: $filePath. New selection size: ${_uiState.value.selectedRecordingIds.size}")
+        Log.d("LibraryViewModel", "Toggled selection for: $id. New selection size: ${_uiState.value.selectedRecordingIds.size}")
     }
 
     fun selectAllLocal() {
@@ -235,18 +235,40 @@ class LibraryViewModel @Inject constructor(
             return
         }
 
-        _uiState.update { it.copy(showMultiDeleteConfirmation = false, isLoadingLocal = true) }
+        _uiState.update { it.copy(showMultiDeleteConfirmation = false, isLoadingLocal = true, isLoadingCloud = true) }
         Log.d("LibraryViewModel", "Confirming multi-delete for ${idsToDelete.size} items.")
 
         viewModelScope.launch {
-            val success = localAudioRepository.deleteLocalRecordings(idsToDelete)
-            _uiState.update { it.copy(isLoadingLocal = false) }
-            if (success) {
-                Log.i("LibraryViewModel", "Multi-delete successful via repository.")
+            val localRecordings = _uiState.value.localRecordings
+            val cloudRecordings = _uiState.value.cloudRecordings
+
+            val localIds = idsToDelete.filter { id -> localRecordings.any { it.filePath == id } }
+            val cloudIds = idsToDelete.filter { id -> cloudRecordings.any { it.id == id } }
+
+            var localSuccess = true
+            var cloudSuccess = true
+
+            if (localIds.isNotEmpty()) {
+                localSuccess = localAudioRepository.deleteLocalRecordings(localIds)
+            }
+
+            if (cloudIds.isNotEmpty()) {
+                cloudIds.forEach { id ->
+                    remoteAudioRepository.deleteCloudRecording(id).collect { result ->
+                        if (result.isFailure) cloudSuccess = false
+                    }
+                }
+            }
+
+            _uiState.update { it.copy(isLoadingLocal = false, isLoadingCloud = false) }
+
+            if (localSuccess && cloudSuccess) {
+                Log.i("LibraryViewModel", "Multi-delete successful.")
                 _uiState.update { it.copy(isMultiSelectActive = false, selectedRecordingIds = emptySet()) }
-                loadLocalRecordings()
+                if (localIds.isNotEmpty()) loadLocalRecordings()
+                if (cloudIds.isNotEmpty()) forceRefreshCloudRecordings()
             } else {
-                Log.e("LibraryViewModel", "Multi-delete failed via repository.")
+                Log.e("LibraryViewModel", "Multi-delete failed. Local: $localSuccess, Cloud: $cloudSuccess")
                 _uiState.update {
                     it.copy(
                         error = "Failed to delete some or all selected recordings.",
@@ -254,7 +276,8 @@ class LibraryViewModel @Inject constructor(
                         selectedRecordingIds = emptySet()
                     )
                 }
-                loadLocalRecordings()
+                if (localIds.isNotEmpty()) loadLocalRecordings()
+                if (cloudIds.isNotEmpty()) forceRefreshCloudRecordings()
             }
         }
     }
@@ -374,7 +397,7 @@ class LibraryViewModel @Inject constructor(
             when (recording) {
                 is RecordingMetadata -> toggleSelection(recording.filePath)
                 is AudioMetadataDto -> {
-                    Log.w("LibraryViewModel", "Multi-select toggle attempted on cloud item (not implemented). ID: ${recording.recordingId}")
+                    recording.id?.let { toggleSelection(it) }
                 }
                 else -> Log.w("LibraryViewModel", "onRecordingClicked in multi-select mode called with unknown type: ${recording::class.java}")
             }

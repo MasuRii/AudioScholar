@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,7 +34,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,7 +55,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.navigation.NavController
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import edu.cit.audioscholar.R
+import edu.cit.audioscholar.ui.auth.LegalContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -62,6 +72,55 @@ fun AboutScreen(
     val uriHandler = LocalUriHandler.current
     val scrollState = rememberScrollState()
     val version = getAppVersion(context)
+
+    val sheetState = rememberModalBottomSheetState()
+    var showLegalSheet by remember { mutableStateOf(false) }
+    var legalSheetTitle by remember { mutableStateOf("") }
+    var legalSheetContent by remember { mutableStateOf("") }
+
+    if (showLegalSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showLegalSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f)
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = legalSheetTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    textAlign = TextAlign.Center
+                )
+                HorizontalDivider()
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 16.dp)
+                ) {
+                    MarkdownText(
+                        markdown = legalSheetContent,
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
+                    )
+                }
+                TextButton(
+                    onClick = {
+                        scope.launch { sheetState.hide() }.invokeOnCompletion { showLegalSheet = false }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                ) {
+                    Text(stringResource(R.string.onboarding_back).replace("Back", "Close"))
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -173,15 +232,34 @@ fun AboutScreen(
                 DeveloperProfile(imageRes = R.drawable.ic_aboutscreen_nathan, name = "Nathan John Orlanes")
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
+
+            Text(
+                text = stringResource(id = R.string.about_advisers_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.align(Alignment.Start),
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            
+            Spacer(Modifier.height(8.dp))
 
             Text(
                 text = stringResource(id = R.string.about_developer_adviser),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Start).padding(start = 16.dp),
+                textAlign = TextAlign.Start,
                 color = MaterialTheme.colorScheme.onBackground
             )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(id = R.string.about_developer_adviser_group),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.align(Alignment.Start).padding(start = 16.dp),
+                textAlign = TextAlign.Start,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(id = R.string.about_developer_institution),
                 style = MaterialTheme.typography.bodyMedium,
@@ -211,7 +289,11 @@ fun AboutScreen(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 TextButton(
-                    onClick = { uriHandler.openUri(context.getString(R.string.settings_url_privacy_policy)) },
+                    onClick = {
+                        legalSheetTitle = context.getString(R.string.settings_item_privacy_policy)
+                        legalSheetContent = LegalContent.PRIVACY_POLICY
+                        showLegalSheet = true
+                    },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary
                     )
@@ -219,7 +301,11 @@ fun AboutScreen(
                     Text(stringResource(id = R.string.about_link_privacy_policy))
                 }
                 TextButton(
-                    onClick = { uriHandler.openUri(context.getString(R.string.settings_url_terms_service)) },
+                    onClick = {
+                        legalSheetTitle = context.getString(R.string.settings_item_terms_service)
+                        legalSheetContent = LegalContent.TERMS_OF_SERVICE
+                        showLegalSheet = true
+                    },
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.primary
                     )

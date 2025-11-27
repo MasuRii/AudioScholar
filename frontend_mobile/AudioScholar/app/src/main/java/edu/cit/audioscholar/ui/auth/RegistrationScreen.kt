@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.*
+import dev.jeziellago.compose.markdowntext.MarkdownText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -92,9 +93,9 @@ fun RegistrationScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 16.dp)
                 ) {
-                    Text(
-                        text = legalSheetContent,
-                        style = MaterialTheme.typography.bodyMedium,
+                    MarkdownText(
+                        markdown = legalSheetContent,
+                        style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
                     )
                 }
                 Button(
@@ -302,7 +303,7 @@ fun RegistrationScreen(
                 leadingIcon = { Icon(Icons.Outlined.Password, contentDescription = null) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                visualTransformation = if (uiState.isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                visualTransformation = if (uiState.isConfirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     focusManager.clearFocus()
@@ -312,12 +313,12 @@ fun RegistrationScreen(
                 }),
                 trailingIcon = {
                     IconButton(
-                        onClick = viewModel::togglePasswordVisibility,
+                        onClick = viewModel::toggleConfirmPasswordVisibility,
                         enabled = !uiState.isAnyLoading
                     ) {
                         Icon(
-                            imageVector = if (uiState.isPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                            contentDescription = stringResource(if (uiState.isPasswordVisible) R.string.cd_hide_password else R.string.cd_show_password)
+                            imageVector = if (uiState.isConfirmPasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                            contentDescription = stringResource(if (uiState.isConfirmPasswordVisible) R.string.cd_hide_password else R.string.cd_show_password)
                         )
                     }
                 },

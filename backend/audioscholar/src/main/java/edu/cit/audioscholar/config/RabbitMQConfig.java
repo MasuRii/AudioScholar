@@ -10,6 +10,7 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -40,6 +41,12 @@ public class RabbitMQConfig {
 
 	public static final String RECOMMENDATIONS_QUEUE_NAME = "recommendations.queue";
 	public static final String RECOMMENDATIONS_ROUTING_KEY = "recommendations.process.key";
+
+	@Value("${spring.rabbitmq.listener.simple.concurrency:1}")
+	private int concurrency;
+
+	@Value("${spring.rabbitmq.listener.simple.max-concurrency:1}")
+	private int maxConcurrency;
 
 	@Bean
 	TopicExchange exchange() {
@@ -142,8 +149,10 @@ public class RabbitMQConfig {
 		SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
 		factory.setConnectionFactory(connectionFactory);
 		factory.setMessageConverter(messageConverter);
-		factory.setConcurrentConsumers(1); // STRICT LIMIT: 1 concurrent consumer
-		factory.setMaxConcurrentConsumers(1); // Do not scale up
+
+		factory.setConcurrentConsumers(concurrency);
+		factory.setMaxConcurrentConsumers(maxConcurrency);
+
 		factory.setPrefetchCount(1);
 		return factory;
 	}
