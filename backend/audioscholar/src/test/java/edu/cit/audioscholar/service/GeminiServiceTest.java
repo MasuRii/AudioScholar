@@ -88,7 +88,7 @@ class GeminiServiceTest {
 			ResponseEntity<String> transResponse = new ResponseEntity<>(transcriptionResponse, HttpStatus.OK);
 
 			// We need to capture the argument to verify the prompt
-			ArgumentCaptor<HttpEntity<String>> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
+			ArgumentCaptor<HttpEntity> entityCaptor = ArgumentCaptor.forClass(HttpEntity.class);
 			when(restTemplate.exchange(contains(":generateContent"), eq(HttpMethod.POST), entityCaptor.capture(),
 					eq(String.class))).thenReturn(transResponse);
 
@@ -96,12 +96,15 @@ class GeminiServiceTest {
 			geminiService.callGeminiTranscriptionAPIWithFallback(tempFile, "test-audio.mp3");
 
 			// Then
-			HttpEntity<String> capturedEntity = entityCaptor.getValue();
-			String body = capturedEntity.getBody().toString();
+			HttpEntity capturedEntity = entityCaptor.getValue();
+			// The body is actually a HashMap because that's what the service sends.
+			// Casting to String in the captor causes a ClassCastException.
+			Object body = capturedEntity.getBody();
+			String bodyString = body.toString();
 
 			String expectedPrompt = "Transcribe the following audio content accurately. If the audio contains no speech or only silence, output the exact text '[NO SPEECH DETECTED]' in the transcript field. Otherwise, output only the spoken text. Maintain original punctuation, capitalization, and paragraph breaks as best as possible. For numbers, spell them as digits if they represent quantities or measurements, and as words if they are part of natural speech. Include any hesitations, repetitions, or fillers that are meaningful to the content.";
 
-			assertTrue(body.contains(expectedPrompt),
+			assertTrue(bodyString.contains(expectedPrompt),
 					"The prompt sent to Gemini API does not match the expected new prompt.");
 
 		} finally {
@@ -182,6 +185,37 @@ class GeminiServiceTest {
 
 		// Verify that no success is reported
 		verify(keyRotationManager, never()).reportSuccess(any(), any());
+	}
+
+	@Test
+	void testGenerateTranscriptOnlySummary_Success() {
+		// Given
+		String metadataId = "test-metadata-id";
+		when(keyRotationManager.getKey(any(KeyProvider.class))).thenReturn(API_KEY);
+		String expectedExtractedText = "{\"summaryText\": \"Audio only summary\", \"keyPoints\": [], \"topics\": [], \"glossary\": []}";
+		ResponseEntity<String> successResponse = new ResponseEntity<>(
+				"{\"candidates\": [{\"content\": {\"parts\": [{\"text\": "
+						+ "\"{\\\"summaryText\\\": \\\"Audio only summary\\\", \\\"keyPoints\\\": [], \\\"topics\\\": [], \\\"glossary\\\": []}\"}]}}]}",
+				HttpStatus.OK);
+
+		// Mock the rotation service to execute the lambda immediately
+		when(rotationService.executeWithInfiniteRotation(any())).thenAnswer(invocation -> {
+			Function<String, String> apiCallFunction = invocation.getArgument(0);
+			return apiCallFunction.apply("gemini-2.5-flash");
+		});
+
+		// Mock success on the RestTemplate call inside the lambda
+		when(restTemplate.exchange(contains("gemini-2.5-flash"), eq(HttpMethod.POST), any(), eq(String.class)))
+				.thenReturn(successResponse);
+
+		// When
+		String result = geminiService.generateTranscriptOnlySummary(TRANSCRIPT_TEXT, metadataId);
+
+		// Then
+		assertEquals(expectedExtractedText, result);
+		verify(rotationService, times(1)).executeWithInfiniteRotation(any());
+		verify(restTemplate, times(1)).exchange(anyString(), eq(HttpMethod.POST), any(), eq(String.class));
+		verify(keyRotationManager, times(1)).reportSuccess(KeyProvider.GEMINI, API_KEY);
 	}
 
 	// ==================== LEGACY METHOD TESTS ====================

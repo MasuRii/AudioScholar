@@ -1109,123 +1109,86 @@ public class GeminiService {
 		}
 
 		try {
-			HttpHeaders generateHeaders = new HttpHeaders();
-			generateHeaders.setContentType(MediaType.APPLICATION_JSON);
-
-			String prompt = """
-					Analyze the provided lecture transcript carefully.
-					Generate a comprehensive, concise, well-structured summary in Markdown in the `summaryText` field. Use headings (##) for main sections and bullet points (* or -) for details. Focus on core arguments, findings, definitions, and conclusions presented in the transcript.
-					Identify the main key points or action items discussed and list them as distinct strings in the `keyPoints` array.
-					List the 3-5 most important topics or keywords suitable for searching related content in the `topics` array.
-					Identify important **terms, concepts, acronyms, proper nouns (people, places, organizations mentioned), and technical vocabulary** discussed in the transcript. For each, provide a concise definition relevant to the context. Structure this as an array of objects in the `glossary` field, where each object has a `term` (string) and a `definition` (string). Aim for comprehensive coverage of potentially unfamiliar items for a learner.
-					Stay strictly within the boundaries of what is explicitly mentioned in the transcript. Do not add external information, assumptions, or hallucinations.
-					Ensure the entire output strictly adheres to the provided JSON schema. Output only the JSON object.
-					""";
-
-			Map<String, Object> promptPart = Map.of("text", prompt);
-			Map<String, Object> transcriptPart = Map.of("text", transcriptText);
-
-			List<Object> parts = List.of(promptPart, transcriptPart);
-			Map<String, Object> content = Map.of("parts", parts);
-			List<Object> contents = List.of(content);
-
-			Map<String, Object> generationConfig = new HashMap<>();
-			generationConfig.put("temperature", 0.3);
-			generationConfig.put("maxOutputTokens", MAX_OUTPUT_TOKENS_SUMMARIZATION);
-			generationConfig.put("response_mime_type", "application/json");
-			generationConfig.put("response_schema", SUMMARY_RESPONSE_SCHEMA);
-
-			Map<String, Object> requestBody = new HashMap<>();
-			requestBody.put("contents", contents);
-			requestBody.put("generationConfig", generationConfig);
-
-			HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
-
-			log.info("[{}] Calling Gemini Summarization API (Model: {}) for transcript-only summary...", metadataId,
-					SUMMARIZATION_MODEL_NAME);
-
-			for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-				String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
-				String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
-						.queryParam("key", currentKey).buildAndExpand(SUMMARIZATION_MODEL_NAME).toUriString();
-
+			return rotationService.executeWithInfiniteRotation(targetModel -> {
 				try {
-					ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST,
-							requestEntity, String.class);
+					String currentKey = keyRotationManager.getKey(KeyProvider.GEMINI);
+					String result = callGeminiTranscriptOnlySummarizationSingleModel(transcriptText, metadataId,
+							targetModel, currentKey);
 					keyRotationManager.reportSuccess(KeyProvider.GEMINI, currentKey);
-					log.info(
-							"[{}] Gemini Summarization API call for transcript-only summary successful on attempt {}. Status: {}",
-							metadataId, attempt, response.getStatusCode());
-
-					String responseBody = response.getBody();
-					if (responseBody == null || responseBody.isBlank()) {
-						log.warn(
-								"[{}] Gemini Summarization API returned successful status ({}) but empty body on attempt {}.",
-								metadataId, response.getStatusCode(), attempt);
-						if (attempt == MAX_RETRIES) {
-							return createErrorResponse("Empty Response",
-									"API returned success status but no content after retries.");
-						}
-						sleepForRetry(attempt);
-						continue;
-					}
-
-					try {
-						String extractedJsonText = extractTextFromStandardResponse(responseBody);
-						log.info(
-								"[{}] Successfully received and extracted JSON summary response for transcript-only summary (Length: {}).",
-								metadataId, extractedJsonText.length());
-						return extractedJsonText;
-					} catch (JsonProcessingException jsonEx) {
-						log.error("[{}] Gemini Summarization API response was not valid JSON on attempt {}. Error: {}",
-								metadataId, attempt, jsonEx.getMessage());
-						if (attempt == MAX_RETRIES) {
-							return createErrorResponse("Invalid JSON Response",
-									"API response was not valid JSON: " + jsonEx.getMessage());
-						}
-						sleepForRetry(attempt);
-						continue;
-					}
-
-				} catch (ApiException e) {
-					log.error("[{}] Gemini Summarization API Error on attempt {}: {}", metadataId, attempt,
-							e.getMessage(), e);
-					return createErrorResponse("Summarization API Error", e.getMessage());
-				} catch (HttpServerErrorException | ResourceAccessException e) {
-					log.warn(
-							"[{}] Gemini Summarization API call failed on attempt {}/{} with retryable error: {}. Retrying...",
-							metadataId, attempt, MAX_RETRIES, e.getMessage());
-					if (attempt == MAX_RETRIES) {
-						log.error("[{}] Gemini Summarization API call failed after {} attempts.", metadataId,
-								MAX_RETRIES, e);
-						return createErrorResponse("API Request Failed (Server/Network)", e.getMessage());
-					}
-					sleepForRetry(attempt);
-				} catch (HttpClientErrorException e) {
-					int statusCode = e.getStatusCode().value();
-					if (statusCode == 429 || statusCode == 403) {
-						keyRotationManager.reportError(KeyProvider.GEMINI, currentKey, statusCode);
-					}
-					log.error("[{}] Gemini Summarization API client error: {} - {}", metadataId, e.getStatusCode(),
-							e.getResponseBodyAsString(), e);
-					String details = parseErrorDetails(e);
-					return createErrorResponse("API Client Error: " + e.getStatusCode(), details);
-				} catch (RestClientResponseException e) {
-					log.error("[{}] Gemini Summarization API REST client error: Status {}, Body: {}", metadataId,
-							e.getStatusCode(), e.getResponseBodyAsString(), e);
-					return createErrorResponse("API Request Failed (REST Client)", e.getMessage());
-				} catch (RuntimeException e) {
-					log.error("[{}] Unexpected runtime error during Gemini Summarization processing on attempt {}: {}",
-							metadataId, attempt, e.getMessage(), e);
-					return createErrorResponse("Summarization Processing Error", e.getMessage());
+					return result;
+				} catch (Exception e) {
+					if (e instanceof RuntimeException)
+						throw (RuntimeException) e;
+					throw new RuntimeException(e);
 				}
-			}
-			return createErrorResponse("API Request Failed",
-					"Max retries reached for transcript-only summarization or unexpected flow.");
-
+			});
 		} catch (Exception e) {
 			log.error("[{}] Unexpected error during transcript-only summarization: {}", metadataId, e.getMessage(), e);
 			return createErrorResponse("Summarization Error", "Unexpected error: " + e.getMessage());
+		}
+	}
+
+	private String callGeminiTranscriptOnlySummarizationSingleModel(String transcriptText, String metadataId,
+			String modelName, String currentApiKey) throws Exception {
+		HttpHeaders generateHeaders = new HttpHeaders();
+		generateHeaders.setContentType(MediaType.APPLICATION_JSON);
+
+		String prompt = """
+				Analyze the provided lecture transcript carefully.
+				Generate a comprehensive, concise, well-structured summary in Markdown in the `summaryText` field. Use headings (##) for main sections and bullet points (* or -) for details. Focus on core arguments, findings, definitions, and conclusions presented in the transcript.
+				Identify the main key points or action items discussed and list them as distinct strings in the `keyPoints` array.
+				List the 3-5 most important topics or keywords suitable for searching related content in the `topics` array.
+				Identify important **terms, concepts, acronyms, proper nouns (people, places, organizations mentioned), and technical vocabulary** discussed in the transcript. For each, provide a concise definition relevant to the context. Structure this as an array of objects in the `glossary` field, where each object has a `term` (string) and a `definition` (string). Aim for comprehensive coverage of potentially unfamiliar items for a learner.
+				Stay strictly within the boundaries of what is explicitly mentioned in the transcript. Do not add external information, assumptions, or hallucinations.
+				Ensure the entire output strictly adheres to the provided JSON schema. Output only the JSON object.
+				""";
+
+		Map<String, Object> promptPart = Map.of("text", prompt);
+		Map<String, Object> transcriptPart = Map.of("text", transcriptText);
+
+		List<Object> parts = List.of(promptPart, transcriptPart);
+		Map<String, Object> content = Map.of("parts", parts);
+		List<Object> contents = List.of(content);
+
+		Map<String, Object> generationConfig = new HashMap<>();
+		generationConfig.put("temperature", 0.3);
+		generationConfig.put("maxOutputTokens", MAX_OUTPUT_TOKENS_SUMMARIZATION);
+		generationConfig.put("response_mime_type", "application/json");
+		generationConfig.put("response_schema", SUMMARY_RESPONSE_SCHEMA);
+
+		Map<String, Object> requestBody = new HashMap<>();
+		requestBody.put("contents", contents);
+		requestBody.put("generationConfig", generationConfig);
+
+		HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, generateHeaders);
+
+		log.info("[{}] Calling Gemini Summarization API (Model: {}) for transcript-only summary...", metadataId,
+				modelName);
+
+		String generateContentUrl = UriComponentsBuilder.fromUriString(API_BASE_URL + GENERATE_CONTENT_PATH)
+				.queryParam("key", currentApiKey).buildAndExpand(modelName).toUriString();
+
+		ResponseEntity<String> response = restTemplate.exchange(generateContentUrl, HttpMethod.POST, requestEntity,
+				String.class);
+
+		log.info("[{}] Gemini Summarization API call for transcript-only summary successful using model {}. Status: {}",
+				metadataId, modelName, response.getStatusCode());
+
+		String responseBody = response.getBody();
+		if (responseBody == null || responseBody.isBlank()) {
+			throw new RuntimeException("API returned success status but no content");
+		}
+
+		try {
+			String extractedJsonText = extractTextFromStandardResponse(responseBody);
+			log.info(
+					"[{}] Successfully received and extracted JSON summary response for transcript-only summary (Length: {}).",
+					metadataId, extractedJsonText.length());
+			return extractedJsonText;
+		} catch (JsonProcessingException jsonEx) {
+			log.error("[{}] Gemini Summarization API response was not valid JSON. Error: {}", metadataId,
+					jsonEx.getMessage());
+			throw new RuntimeException("API response was not valid JSON: " + jsonEx.getMessage(), jsonEx);
 		}
 	}
 

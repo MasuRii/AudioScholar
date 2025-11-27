@@ -268,6 +268,15 @@ public class NhostStorageService {
 		return baseUrl + "/v1/files/" + fileId;
 	}
 
+	public boolean isNhostUrl(String url) {
+		if (url == null || url.isBlank()) {
+			return false;
+		}
+		// Check if the URL starts with the configured Nhost storage URL
+		// The nhostStorageUrl variable ensures it ends with /v1/files
+		return url.startsWith(this.nhostStorageUrl);
+	}
+
 	public void deleteFile(String fileId) {
 		if (fileId == null || fileId.isEmpty()) {
 			LOGGER.log(Level.WARNING, "Attempted to delete Nhost file with null or empty ID.");
