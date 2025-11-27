@@ -55,6 +55,22 @@ class UserProfileViewModel @Inject constructor(
 
     init {
         loadUserProfile()
+        observePremiumStatus()
+    }
+
+    private fun observePremiumStatus() {
+        viewModelScope.launch {
+            premiumStatusManager.isPremiumUserFlow.collect { isPremium ->
+                val currentContent = _uiState.value.contentState
+                if (currentContent is ProfileContentState.Success) {
+                    _uiState.update {
+                        it.copy(
+                            contentState = currentContent.copy(isPremium = isPremium)
+                        )
+                    }
+                }
+            }
+        }
     }
 
     fun loadUserProfile() {

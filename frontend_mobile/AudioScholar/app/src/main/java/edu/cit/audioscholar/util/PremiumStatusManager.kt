@@ -5,6 +5,9 @@ import android.util.Base64
 import android.util.Log
 import edu.cit.audioscholar.data.remote.dto.UserProfileDto
 import edu.cit.audioscholar.ui.auth.LoginViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -18,6 +21,9 @@ class PremiumStatusManager @Inject constructor(
         private const val KEY_IS_PREMIUM = "is_premium_user"
         private const val ROLE_PREMIUM = "ROLE_PREMIUM"
     }
+
+    private val _isPremiumUserFlow = MutableStateFlow(isPremiumUser())
+    val isPremiumUserFlow: StateFlow<Boolean> = _isPremiumUserFlow.asStateFlow()
 
     fun updatePremiumStatus(userProfile: UserProfileDto?) {
         var isPremium = userProfile?.roles?.contains(ROLE_PREMIUM) ?: false
@@ -33,6 +39,7 @@ class PremiumStatusManager @Inject constructor(
             putBoolean(KEY_IS_PREMIUM, isPremium)
             apply()
         }
+        _isPremiumUserFlow.value = isPremium
     }
     
     fun updatePremiumStatus(isPremium: Boolean) {
@@ -42,6 +49,7 @@ class PremiumStatusManager @Inject constructor(
             putBoolean(KEY_IS_PREMIUM, isPremium)
             apply()
         }
+        _isPremiumUserFlow.value = isPremium
     }
 
     fun isPremiumUser(): Boolean {
@@ -66,6 +74,7 @@ class PremiumStatusManager @Inject constructor(
             remove(KEY_IS_PREMIUM)
             apply()
         }
+        _isPremiumUserFlow.value = false
     }
     
     private fun isPremiumFromJwtToken(): Boolean {
