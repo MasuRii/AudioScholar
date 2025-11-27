@@ -5,7 +5,7 @@ const getApiBaseUrl = () => {
         return 'http://localhost:8080/';
     } else {
         // Production URL - Update this if your Render backend URL is different
-        return 'https://it342-g3-audioscholar-backend.onrender.com/';
+        return 'https://it342-g3-audioscholar-onrender-com.onrender.com/';
     }
 };
 
