@@ -39,6 +39,12 @@ class MainViewModel @Inject constructor(
 
     init {
         Log.d(TAG, "Initial premium status: $isPremiumUser")
+        viewModelScope.launch {
+            premiumStatusManager.isPremiumUserFlow.collect { isPremium ->
+                isPremiumUser = isPremium
+                Log.d(TAG, "Observed premium status change: $isPremium")
+            }
+        }
     }
 
     val userProfileState: StateFlow<Resource<UserProfileDto?>> = authRepository.getUserProfile()

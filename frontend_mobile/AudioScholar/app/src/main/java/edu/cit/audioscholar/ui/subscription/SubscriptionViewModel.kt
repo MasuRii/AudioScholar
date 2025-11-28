@@ -76,6 +76,21 @@ class SubscriptionViewModel @Inject constructor(
 
     init {
         loadSubscriptionPlans()
+        observePremiumStatus()
+    }
+
+    private fun observePremiumStatus() {
+        viewModelScope.launch {
+            premiumStatusManager.isPremiumUserFlow.collect { isPremium ->
+                Log.d(TAG, "Observed premium status change: $isPremium")
+                _uiState.update {
+                    it.copy(
+                        currentPlanId = if (isPremium) "premium" else "basic",
+                        isPremiumUser = isPremium
+                    )
+                }
+            }
+        }
     }
 
     private fun loadSubscriptionPlans() {
@@ -83,12 +98,13 @@ class SubscriptionViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true) }
             
             try {
+                // Initial load might use the current value, but flow collection will handle updates
                 val isPremium = premiumStatusManager.isPremiumUser()
                 Log.d(TAG, "Loading subscription plans. User premium status: $isPremium")
                 
                 val plans = createMockSubscriptionPlans()
                 
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
                         isLoading = false,
                         plans = plans,

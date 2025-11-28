@@ -114,10 +114,14 @@ public class AudioTranscriptionListenerService {
 						return;
 					}
 
+					// Parallel Processing: Allow execution if status indicates parallel activity or
+					// retries
 					if (currentStatus != ProcessingStatus.UPLOAD_IN_PROGRESS
 							&& currentStatus != ProcessingStatus.PROCESSING_QUEUED
 							&& currentStatus != ProcessingStatus.PDF_CONVERTING
-							&& currentStatus != ProcessingStatus.PDF_CONVERSION_COMPLETE) {
+							&& currentStatus != ProcessingStatus.PDF_CONVERTING_API
+							&& currentStatus != ProcessingStatus.PDF_CONVERSION_COMPLETE
+							&& currentStatus != ProcessingStatus.TRANSCRIBING) {
 						log.info(
 								"[{}] Skipping transcription as metadata is already in status: {}. Transcription has likely been processed already.",
 								metadataId, currentStatus);

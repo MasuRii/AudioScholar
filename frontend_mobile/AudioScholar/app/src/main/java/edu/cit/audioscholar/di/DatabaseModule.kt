@@ -10,7 +10,6 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import edu.cit.audioscholar.data.local.dao.CloudCacheDao
 import edu.cit.audioscholar.data.local.dao.RecordingMetadataDao
 import edu.cit.audioscholar.data.local.db.AppDatabase
 import javax.inject.Singleton
@@ -40,10 +39,4 @@ object DatabaseModule {
     fun provideRecordingMetadataDao(appDatabase: AppDatabase): RecordingMetadataDao {
         return appDatabase.recordingMetadataDao()
     }
-
-    @Provides
-    @Singleton
-    fun provideCloudCacheDao(appDatabase: AppDatabase): CloudCacheDao {
-        return appDatabase.cloudCacheDao()
-    }
-} 
+}

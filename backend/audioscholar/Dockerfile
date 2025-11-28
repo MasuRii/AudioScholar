@@ -22,4 +22,4 @@ RUN apk add --no-cache fontconfig ttf-dejavu
 COPY --from=builder /app/target/audioscholar-*.jar app.jar
 
 # Optimized ENTRYPOINT with Java 24 Compact Object Headers (Single Line)
-ENTRYPOINT ["java", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseCompactObjectHeaders", "-XX:+UseSerialGC", "-Xss256k", "-XX:MaxRAMPercentage=60.0", "-XX:ActiveProcessorCount=2", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-XX:+UnlockExperimentalVMOptions", "-XX:+UseCompactObjectHeaders", "-XX:+UseSerialGC", "-Xss256k", "-XX:MaxRAMPercentage=75.0", "-XX:ActiveProcessorCount=2", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]

@@ -3,6 +3,9 @@ package edu.cit.audioscholar.service;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +32,7 @@ public class PptxConversionListenerService {
 	private final RabbitTemplate rabbitTemplate;
 	@SuppressWarnings("unused")
 	private final ObjectMapper objectMapper;
+	private final Map<String, Lock> metadataLocks = new ConcurrentHashMap<>();
 
 	public PptxConversionListenerService(FirebaseService firebaseService, NhostStorageService nhostStorageService,
 			ConvertApiService convertApiService, RabbitTemplate rabbitTemplate, ObjectMapper objectMapper) {
@@ -43,6 +47,9 @@ public class PptxConversionListenerService {
 	public void handlePptxConversion(AudioProcessingMessage messageDto) {
 		String metadataId = messageDto.getMetadataId();
 		logger.info("Processing PPTX conversion for metadata ID: {}", metadataId);
+
+		Lock lock = metadataLocks.computeIfAbsent(metadataId, k -> new ReentrantLock());
+		lock.lock();
 
 		try {
 			Map<String, Object> metadataMap = firebaseService.getData(firebaseService.getAudioMetadataCollectionName(),
@@ -156,6 +163,10 @@ public class PptxConversionListenerService {
 		} catch (Exception e) {
 			logger.error("Error during PPTX to PDF conversion: {}", e.getMessage(), e);
 			updateStatus(metadataId, ProcessingStatus.FAILED, "Error converting PPTX to PDF: " + e.getMessage());
+		} finally {
+			lock.unlock();
+			// Optional: Remove lock from map if needed, but keeping it simple for now to
+			// avoid concurrency issues with removal
 		}
 	}
 

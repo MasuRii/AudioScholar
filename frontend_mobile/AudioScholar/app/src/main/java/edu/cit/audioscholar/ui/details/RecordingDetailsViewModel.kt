@@ -63,7 +63,6 @@ class RecordingDetailsViewModel @Inject constructor(
     private val localAudioRepository: LocalAudioRepository,
     private val playbackManager: PlaybackManager,
     private val remoteAudioRepository: RemoteAudioRepository,
-    private val cloudCacheRepository: CloudCacheRepository,
     private val gson: Gson,
     private val application: Application,
     private val processingEventBus: ProcessingEventBus
@@ -85,6 +84,9 @@ class RecordingDetailsViewModel @Inject constructor(
 
     private val _navigationEvent = Channel<NavigationEvent>(Channel.BUFFERED)
     val navigationEvent: Flow<NavigationEvent> = _navigationEvent.receiveAsFlow()
+
+    private val _recordingUpdatedEvent = Channel<Unit>(Channel.BUFFERED)
+    val recordingUpdatedEvent: Flow<Unit> = _recordingUpdatedEvent.receiveAsFlow()
 
     private val localFilePath: String? = savedStateHandle.get<String>(Screen.RecordingDetails.ARG_LOCAL_FILE_PATH)
     private val cloudId: String? = savedStateHandle.get<String>(Screen.RecordingDetails.ARG_CLOUD_ID)
@@ -142,9 +144,10 @@ class RecordingDetailsViewModel @Inject constructor(
                         val cacheTimestamp = metadata.cacheTimestampMillis
                         val cachedSummary = metadata.cachedSummaryText
                         val cachedGlossary = metadata.cachedGlossaryItems
+                        val cachedKeyPoints = metadata.cachedKeyPoints
                         val cachedRecs = metadata.cachedRecommendations
 
-                        val isSummaryCacheValid = isCacheValid(cacheTimestamp) && !cachedSummary.isNullOrBlank()
+                        val isSummaryCacheValid = isCacheValid(cacheTimestamp) && (!cachedSummary.isNullOrBlank() || !cachedKeyPoints.isNullOrEmpty())
                         val areRecommendationsCacheValid = isCacheValid(cacheTimestamp) && !cachedRecs.isNullOrEmpty()
 
                         Log.d("DetailsViewModel", "Local metadata loaded. RemoteId: $remoteId, CacheTime: $cacheTimestamp, SummaryCacheValid: $isSummaryCacheValid, RecsCacheValid: $areRecommendationsCacheValid")
@@ -165,6 +168,7 @@ class RecordingDetailsViewModel @Inject constructor(
                             it.copy(
                                 isLoading = false,
                                 title = currentTitle,
+                                description = metadata.description ?: "",
                                 editableTitle = TextFieldValue(currentTitle, selection = TextRange(currentTitle.length)),
                                 dateCreated = formatTimestampMillis(metadata.timestampMillis),
                                 durationMillis = metadata.durationMillis,
@@ -176,9 +180,13 @@ class RecordingDetailsViewModel @Inject constructor(
                                 error = null,
                                 summaryStatus = nextSummaryStatus,
                                 recommendationsStatus = nextRecsStatus,
+                                summaryId = metadata.summaryId,
                                 summaryText = if (isSummaryCacheValid) cachedSummary ?: "" else "",
+                                keyPoints = if (isSummaryCacheValid) cachedKeyPoints ?: emptyList() else emptyList(),
+                                topics = if (isSummaryCacheValid) metadata.cachedTopics ?: emptyList() else emptyList(),
                                 glossaryItems = if (isSummaryCacheValid) cachedGlossary ?: emptyList() else emptyList(),
                                 youtubeRecommendations = if (areRecommendationsCacheValid) cachedRecs ?: emptyList() else emptyList(),
+                                attachedPowerPoint = metadata.attachmentUri,
                                 isCloudSource = false
                             )
                         }
@@ -231,43 +239,16 @@ class RecordingDetailsViewModel @Inject constructor(
                 return@launch
             }
 
-            var needsSummaryFetch = true
-            var needsRecsFetch = true
-            var initialSummaryStatus = SummaryStatus.PROCESSING
-            var initialRecsStatus = RecommendationsStatus.LOADING
-            var cachedSummaryText: String? = null
-            var cachedGlossary: List<GlossaryItemDto>? = null
-            var cachedRecs: List<RecommendationDto>? = null
+            val initialSummaryStatus = SummaryStatus.PROCESSING
+            val initialRecsStatus = RecommendationsStatus.LOADING
 
-            val idForCacheCheck = recordingId?.takeIf { it.isNotBlank() } ?: primaryId
-            Log.d("DetailsViewModel", "Using ID for cache check: $idForCacheCheck")
-
-            cloudCacheRepository.getCache(idForCacheCheck)?.let { cloudCache ->
-                Log.d("DetailsViewModel", "Found dedicated cloud cache entry for $idForCacheCheck.")
-                val cacheTimestamp = cloudCache.cacheTimestampMillis
-                val isSummaryCacheValid = isCacheValid(cacheTimestamp) && !cloudCache.summaryText.isNullOrBlank()
-                val areRecsCacheValid = isCacheValid(cacheTimestamp) && !cloudCache.recommendationsJson.isNullOrBlank()
-                Log.d("DetailsViewModel", "[CloudCache] Check for $idForCacheCheck: SummaryValid=$isSummaryCacheValid, RecsValid=$areRecsCacheValid")
-
-                if (isSummaryCacheValid) {
-                    needsSummaryFetch = false
-                    initialSummaryStatus = SummaryStatus.READY
-                    cachedSummaryText = cloudCache.summaryText
-                    cachedGlossary = parseGlossary(cloudCache.glossaryJson)
-                }
-                if (areRecsCacheValid) {
-                    needsRecsFetch = false
-                    initialRecsStatus = RecommendationsStatus.READY
-                    cachedRecs = parseRecommendations(cloudCache.recommendationsJson)
-                }
-            } ?: Log.d("DetailsViewModel", "No dedicated cloud cache entry found for $idForCacheCheck.")
-
-            Log.i("DetailsViewModel", "[Cloud Load] Setting initial state. Summary Status: $initialSummaryStatus, Recs Status: $initialRecsStatus, Has Summary Text: ${!cachedSummaryText.isNullOrBlank()}")
+            Log.i("DetailsViewModel", "[Cloud Load] Setting initial state. Summary Status: $initialSummaryStatus, Recs Status: $initialRecsStatus")
 
             _uiState.update {
                 it.copy(
                     isLoading = false,
                     title = title,
+                    description = "",
                     editableTitle = TextFieldValue(title, selection = TextRange(title.length)),
                     dateCreated = if (timestampSeconds > 0) formatTimestampMillis(TimeUnit.SECONDS.toMillis(timestampSeconds)) else "Unknown Date",
                     durationMillis = 0L,
@@ -281,9 +262,10 @@ class RecordingDetailsViewModel @Inject constructor(
                     error = null,
                     summaryStatus = initialSummaryStatus,
                     recommendationsStatus = initialRecsStatus,
-                    summaryText = cachedSummaryText ?: "",
-                    glossaryItems = cachedGlossary ?: emptyList(),
-                    youtubeRecommendations = cachedRecs ?: emptyList(),
+                    summaryText = "",
+                    keyPoints = emptyList(),
+                    glossaryItems = emptyList(),
+                    youtubeRecommendations = emptyList(),
                     isCloudSource = true
                 )
             }
@@ -292,17 +274,31 @@ class RecordingDetailsViewModel @Inject constructor(
             playbackUrl?.let { configurePlayback(cloudUrl = it) }
 
             val idToUseForFetch = recordingId?.takeIf { it.isNotBlank() } ?: primaryId
-            if ((needsSummaryFetch || needsRecsFetch) && idToUseForFetch.isNotBlank()) {
-                Log.d("DetailsViewModel", "[Cloud Load] Cache invalid/missing for $idToUseForFetch. Triggering direct fetches.")
-                 if (needsSummaryFetch) {
-                     launch { fetchSummary(idToUseForFetch) }
-                 }
-                 if (needsRecsFetch) {
-                     launch { fetchRecommendations(idToUseForFetch) }
-                 }
-            } else {
-                Log.d("DetailsViewModel", "[Cloud Load] Cache is valid for $idToUseForFetch or fetch ID missing. No fetch needed.")
+            if (idToUseForFetch.isNotBlank()) {
+                launch { fetchCloudDetails(idToUseForFetch) }
+                launch { fetchSummary(idToUseForFetch) }
+                launch { fetchRecommendations(idToUseForFetch) }
             }
+        }
+    }
+
+    private suspend fun fetchCloudDetails(remoteId: String) {
+        try {
+            remoteAudioRepository.getCloudRecordingDetails(remoteId).collect { result ->
+                result.onSuccess { dto ->
+                    _uiState.update {
+                        it.copy(
+                            description = dto.description ?: "",
+                            title = dto.title ?: it.title,
+                            editableTitle = TextFieldValue(dto.title ?: it.title, selection = TextRange((dto.title ?: it.title).length))
+                        )
+                    }
+                }.onFailure { e ->
+                    Log.w("DetailsViewModel", "Failed to fetch latest cloud details for $remoteId", e)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("DetailsViewModel", "Error fetching cloud details", e)
         }
     }
 
@@ -384,13 +380,16 @@ class RecordingDetailsViewModel @Inject constructor(
                 result.onSuccess { summaryDto ->
                     Log.i("DetailsViewModel", "[DirectFetch SUCCESS] Summary fetch OK for $remoteId.")
                     val updatedState = _uiState.updateAndGet {
-                        it.copy(
-                            summaryStatus = SummaryStatus.READY,
-                            summaryText = summaryDto.formattedSummaryText ?: "",
-                            glossaryItems = summaryDto.glossary ?: emptyList(),
-                            error = null
-                        )
-                    }
+                it.copy(
+                    summaryStatus = SummaryStatus.READY,
+                    summaryId = summaryDto.summaryId,
+                    summaryText = summaryDto.formattedSummaryText ?: "",
+                    keyPoints = summaryDto.keyPoints ?: emptyList(),
+                    topics = summaryDto.topics ?: emptyList(),
+                    glossaryItems = summaryDto.glossary ?: emptyList(),
+                    error = null
+                )
+            }
                     Log.d("DetailsViewModel", "[DirectFetch SUCCESS] UI State updated. New status: ${updatedState.summaryStatus}")
                     cacheSummary(remoteId, summaryDto)
                 }.onFailure { e ->
@@ -443,6 +442,9 @@ class RecordingDetailsViewModel @Inject constructor(
                 val updatedMeta = localMeta.copy(
                     cachedSummaryText = summaryDto.formattedSummaryText,
                     cachedGlossaryItems = summaryDto.glossary,
+                    cachedKeyPoints = summaryDto.keyPoints,
+                    cachedTopics = summaryDto.topics,
+                    summaryId = summaryDto.summaryId,
                     cacheTimestampMillis = cacheTimestamp
                 )
                 Log.d("DetailsViewModel", "[Cache] Saving fetched summary data to local cache for ${localMeta.filePath}")
@@ -456,18 +458,13 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                 }
             } ?: Log.w("DetailsViewModel", "[Cache] Summary fetched for local source, but currentMetadata is null!")
-        } else {
-            Log.d("DetailsViewModel", "[Cache] Saving fetched summary data to cloud cache for Recording ID: $remoteId")
-            viewModelScope.launch(Dispatchers.IO) {
-                cloudCacheRepository.saveSummaryToCache(remoteId, summaryDto, cacheTimestamp)
-            }
         }
     }
 
     private fun cacheRecommendations(remoteId: String, recommendationsList: List<RecommendationDto>) {
-         val cacheTimestamp = System.currentTimeMillis()
-         val currentState = uiState.value
-         if (!currentState.isCloudSource) {
+        val cacheTimestamp = System.currentTimeMillis()
+        val currentState = uiState.value
+        if (!currentState.isCloudSource) {
             currentMetadata?.let { localMeta ->
                 val finalTimestamp = if(currentState.summaryStatus == SummaryStatus.READY && localMeta.cacheTimestampMillis != null && localMeta.cacheTimestampMillis > cacheTimestamp - 5000) localMeta.cacheTimestampMillis else cacheTimestamp
                 val updatedMeta = localMeta.copy(
@@ -485,11 +482,6 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                 }
             } ?: Log.w("DetailsViewModel", "[Cache] Recommendations fetched for local source, but currentMetadata is null!")
-        } else {
-            Log.d("DetailsViewModel", "[Cache] Saving fetched recommendations data to cloud cache for Recording ID: $remoteId")
-            viewModelScope.launch(Dispatchers.IO) {
-                cloudCacheRepository.saveRecommendationsToCache(remoteId, recommendationsList, cacheTimestamp)
-            }
         }
     }
 
@@ -560,11 +552,11 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                 }
                 
-                if (powerpointFile?.exists() != true || powerpointFile?.length() == 0L) {
+                if (powerpointFile.exists() != true || powerpointFile.length() == 0L) {
                     Log.e("DetailsViewModel", "Failed to create temporary PowerPoint file or file is empty")
                     powerpointFile = null
                 } else {
-                    Log.d("DetailsViewModel", "PowerPoint temp file created successfully: ${powerpointFile?.length()} bytes")
+                    Log.d("DetailsViewModel", "PowerPoint temp file created successfully: ${powerpointFile.length()} bytes")
                 }
                 
             } catch (e: Exception) {
@@ -644,6 +636,7 @@ class RecordingDetailsViewModel @Inject constructor(
                                     currentMetadata = updatedMetaWithId
                                     Log.i("DetailsViewModel", "Successfully saved remoteRecordingId to local metadata.")
                                     _uiState.update { it.copy(remoteRecordingId = newRemoteId) }
+                                    viewModelScope.launch { _recordingUpdatedEvent.trySend(Unit) }
                                     listenForProcessingCompletion(newRemoteId, fetchSummary = true, fetchRecs = true)
                                 } else {
                                     Log.e("DetailsViewModel", "Failed to save remoteRecordingId to local metadata.")
@@ -668,7 +661,7 @@ class RecordingDetailsViewModel @Inject constructor(
                         }
                         is UploadResult.Error -> {
                             Log.e("DetailsViewModel", "Upload status: Error - ${result.message}")
-                            val userFriendlyError = result.message ?: application.getString(R.string.error_upload_failed_generic)
+                            val userFriendlyError = result.message
 
                             _uiState.update { it.copy(
                                 uploadProgressPercent = null,
@@ -695,7 +688,7 @@ class RecordingDetailsViewModel @Inject constructor(
 
     private fun getFileExtensionFromUri(uri: Uri): String? {
         val fileName = getFileNameFromUri(uri)
-        return fileName?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() }
+        return fileName.substringAfterLast('.', "").takeIf { it.isNotEmpty() }
     }
 
     private fun mapErrorToUserFriendlyMessage(e: Throwable, default: String = "An error occurred."): String {
@@ -757,10 +750,10 @@ class RecordingDetailsViewModel @Inject constructor(
 
     fun onCopySummaryAndNotes() {
         val state = _uiState.value
-        if (state.summaryStatus == SummaryStatus.READY && (state.summaryText.isNotEmpty() || state.glossaryItems.isNotEmpty())) {
+        if (state.summaryStatus == SummaryStatus.READY && (state.summaryText.isNotEmpty() || state.keyPoints.isNotEmpty())) {
             val summaryPart = "Summary:\n${state.summaryText.ifBlank { "Not available" }}\n\n"
-            val notesPart = "AI Notes (Glossary):\n" +
-                    state.glossaryItems.joinToString("\n") { "- ${it.term ?: "Term N/A"}: ${it.definition ?: "Definition N/A"}" }.ifEmpty { "Not available" }
+            val notesPart = "Key Points:\n" +
+                    state.keyPoints.joinToString("\n") { "- $it" }.ifEmpty { "Not available" }
 
             val combinedText = summaryPart + notesPart
             Log.d("DetailsViewModel", "Copy Summary & Notes clicked. Text prepared.")
@@ -789,9 +782,23 @@ class RecordingDetailsViewModel @Inject constructor(
         if (uri != null) {
             val filename = getFileNameFromUri(uri)
             Log.d("DetailsViewModel", "Setting attached PowerPoint: $uri")
-            val infoMsg = "PowerPoint attached: $filename"
-            _uiState.update { it.copy(attachedPowerPoint = uri.toString(), infoMessage = infoMsg) }
-            viewModelScope.launch { _infoMessageEvent.trySend(infoMsg) }
+            
+            viewModelScope.launch {
+                val state = uiState.value
+                if (!state.isCloudSource && state.filePath.isNotEmpty()) {
+                    val success = localAudioRepository.updateAttachmentUri(state.filePath, uri.toString())
+                    if (success) {
+                        Log.d("DetailsViewModel", "Persisted attachment URI to local metadata.")
+                        currentMetadata = currentMetadata?.copy(attachmentUri = uri.toString())
+                    } else {
+                        Log.e("DetailsViewModel", "Failed to persist attachment URI.")
+                    }
+                }
+                
+                val infoMsg = "PowerPoint attached: $filename"
+                _uiState.update { it.copy(attachedPowerPoint = uri.toString(), infoMessage = infoMsg) }
+                _infoMessageEvent.trySend(infoMsg)
+            }
         } else {
             val infoMsg = "PowerPoint selection cancelled."
             _uiState.update { it.copy(infoMessage = infoMsg) }
@@ -819,9 +826,38 @@ class RecordingDetailsViewModel @Inject constructor(
 
     fun detachPowerPoint() {
         Log.d("DetailsViewModel", "Detach PowerPoint clicked.")
-        val infoMsg = "PowerPoint detached."
-        _uiState.update { it.copy(attachedPowerPoint = null, infoMessage = infoMsg) }
-        viewModelScope.launch { _infoMessageEvent.trySend(infoMsg) }
+        viewModelScope.launch {
+            val state = uiState.value
+            if (!state.isCloudSource && state.filePath.isNotEmpty()) {
+                val success = localAudioRepository.updateAttachmentUri(state.filePath, null)
+                if (success) {
+                    currentMetadata = currentMetadata?.copy(attachmentUri = null)
+                }
+            }
+            val infoMsg = "PowerPoint detached."
+            _uiState.update { it.copy(attachedPowerPoint = null, infoMessage = infoMsg) }
+            _infoMessageEvent.trySend(infoMsg)
+        }
+    }
+
+    fun refreshDetails() {
+        val state = uiState.value
+        if (state.isCloudSource) {
+            val idToFetch = state.remoteRecordingId ?: state.cloudId
+            if (idToFetch != null) {
+                Log.d("DetailsViewModel", "Refreshing cloud details for $idToFetch")
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isLoading = true) }
+                    fetchCloudDetails(idToFetch)
+                    fetchSummary(idToFetch)
+                    fetchRecommendations(idToFetch)
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+        } else {
+            Log.d("DetailsViewModel", "Refetching local details for ${state.filePath}")
+            loadLocalRecordingDetailsAndListen(state.filePath)
+        }
     }
 
     fun onWatchYouTubeVideo(video: RecommendationDto) {
@@ -955,95 +991,159 @@ class RecordingDetailsViewModel @Inject constructor(
         _uiState.update { it.copy(infoMessage = null) }
     }
 
-    fun onTitleEditRequested() {
-        _uiState.update {
-            val currentTitle = it.title
-            it.copy(isEditingTitle = true, editableTitle = TextFieldValue(currentTitle, selection = TextRange(currentTitle.length)))
-        }
-        Log.d("DetailsViewModel", "Title edit requested.")
+    fun openEditDialog() {
+        _uiState.update { it.copy(showEditDialog = true) }
     }
 
-    fun onTitleChanged(newTitle: TextFieldValue) {
-        _uiState.update { it.copy(editableTitle = newTitle) }
+    fun closeEditDialog() {
+        _uiState.update { it.copy(showEditDialog = false) }
     }
 
-    fun onTitleSaveRequested() {
+    fun openSummaryEditDialog() {
+        _uiState.update { it.copy(showSummaryEditDialog = true) }
+    }
+
+    fun closeSummaryEditDialog() {
+        _uiState.update { it.copy(showSummaryEditDialog = false) }
+    }
+
+    fun openGlossaryEditDialog() {
+        _uiState.update { it.copy(showGlossaryEditDialog = true) }
+    }
+
+    fun closeGlossaryEditDialog() {
+        _uiState.update { it.copy(showGlossaryEditDialog = false) }
+    }
+
+    fun updateSummaryContent(
+        content: String,
+        keyPoints: List<String>,
+        topics: List<String>,
+        glossary: List<GlossaryItemDto>
+    ) {
         val state = _uiState.value
-        val newTitle = state.editableTitle.text.trim()
+        val summaryId = state.summaryId
 
-        if (newTitle.isEmpty()) {
-            Log.w("DetailsViewModel", "Save requested with empty title.")
-            val errorMsg = "Title cannot be empty."
-            _uiState.update {
-                val currentActualTitle = state.title
-                it.copy(isEditingTitle = false, editableTitle = TextFieldValue(currentActualTitle, selection = TextRange(currentActualTitle.length)), error = errorMsg)
-            }
-            viewModelScope.launch { _errorEvent.trySend(errorMsg)}
+        if (summaryId == null) {
+            val errorMsg = "Cannot update summary: Summary ID is missing."
+            _uiState.update { it.copy(error = errorMsg) }
+            viewModelScope.launch { _errorEvent.trySend(errorMsg) }
             return
         }
 
-        if (newTitle == state.title) {
-            Log.d("DetailsViewModel", "Title unchanged. Exiting edit mode.")
-            _uiState.update { it.copy(isEditingTitle = false) }
-            return
-        }
-
-        _uiState.update { it.copy(isEditingTitle = false, title = newTitle, isLoading = true) }
+        _uiState.update { it.copy(isUpdatingDetails = true, showSummaryEditDialog = false, showGlossaryEditDialog = false) }
 
         viewModelScope.launch {
-            var success = false
-            var errorMsg: String? = null
+            remoteAudioRepository.updateSummary(summaryId, content, keyPoints, topics, glossary)
+                .collect { result ->
+                    result.onSuccess { updatedDto ->
+                        _uiState.update {
+                            it.copy(
+                                summaryText = updatedDto.formattedSummaryText ?: content,
+                                keyPoints = updatedDto.keyPoints ?: keyPoints,
+                                topics = updatedDto.topics ?: topics,
+                                glossaryItems = updatedDto.glossary ?: glossary,
+                                isUpdatingDetails = false,
+                                infoMessage = "Summary updated successfully"
+                            )
+                        }
+                        viewModelScope.launch { _infoMessageEvent.trySend("Summary updated successfully") }
+                        // Also update cache if needed
+                        cacheSummary(state.remoteRecordingId ?: "", updatedDto)
+                    }.onFailure { e ->
+                        val errorMsg = mapErrorToUserFriendlyMessage(e)
+                        _uiState.update { it.copy(
+                            isUpdatingDetails = false,
+                            error = errorMsg,
+                            title = state.title,
+                            description = state.description
+                        ) }
+                        viewModelScope.launch { _errorEvent.trySend(errorMsg) }
+                    }
+                }
+        }
+    }
 
+    fun updateRecordingDetails(newTitle: String, newDescription: String) {
+        val state = _uiState.value
+        val titleToSave = newTitle.trim()
+        val descToSave = newDescription.trim()
+
+        if (titleToSave.isEmpty()) {
+            val errorMsg = "Title cannot be empty."
+            _uiState.update { it.copy(error = errorMsg) }
+            viewModelScope.launch { _errorEvent.trySend(errorMsg) }
+            return
+        }
+
+        _uiState.update { it.copy(
+            isUpdatingDetails = true,
+            showEditDialog = false,
+            title = titleToSave,
+            description = descToSave
+        ) }
+
+        viewModelScope.launch {
             try {
                 if (state.isCloudSource) {
-                    val primaryCloudId = state.cloudId
-                    if (primaryCloudId == null) {
-                        Log.e("DetailsViewModel", "Cannot update cloud title: Primary Cloud ID is null.")
-                        errorMsg = "Cannot update title: Recording ID unknown."
+                    val idToUpdate = state.remoteRecordingId ?: state.cloudId
+                    if (idToUpdate != null) {
+                        remoteAudioRepository.updateRecordingDetails(idToUpdate, titleToSave, descToSave)
+                            .collect { result ->
+                                result.onSuccess { updatedDto ->
+                                    _uiState.update {
+                                        it.copy(
+                                            title = updatedDto.title ?: titleToSave,
+                                            description = updatedDto.description ?: descToSave,
+                                            isUpdatingDetails = false,
+                                            infoMessage = "Details updated successfully"
+                                        )
+                                    }
+                                    
+                                    // Local metadata update is intentionally skipped here to decouple sync.
+                                    // Local files are only updated on explicit user action or local edit.
+
+                                    viewModelScope.launch { _infoMessageEvent.trySend("Details updated successfully") }
+                                    viewModelScope.launch { _recordingUpdatedEvent.trySend(Unit) }
+                                }.onFailure { e ->
+                                    val errorMsg = mapErrorToUserFriendlyMessage(e)
+                                    _uiState.update { it.copy(isUpdatingDetails = false, error = errorMsg) }
+                                    viewModelScope.launch { _errorEvent.trySend(errorMsg) }
+                                }
+                            }
                     } else {
-                        Log.d("DetailsViewModel", "Attempting to update cloud title for Primary ID: $primaryCloudId to '$newTitle'")
-                        Log.w("DetailsViewModel", "Cloud title update endpoint call is commented out.")
-                        success = false
-                        if (!success) errorMsg = "Failed to update cloud title (Not implemented)."
+                        val errorMsg = "Cannot update: ID unknown."
+                        _uiState.update { it.copy(isUpdatingDetails = false, error = errorMsg) }
+                        viewModelScope.launch { _errorEvent.trySend(errorMsg) }
                     }
                 } else {
+                    // Local update
                     val meta = currentMetadata
-                    if (meta == null || meta.filePath.isEmpty()) {
-                        Log.e("DetailsViewModel", "Cannot save local title: Current metadata or path is null.")
-                        errorMsg = "Cannot update title: Recording metadata missing."
+                    if (meta != null && meta.filePath.isNotEmpty()) {
+                         val titleSuccess = localAudioRepository.updateRecordingTitle(meta.filePath, titleToSave)
+                         if (titleSuccess) {
+                             currentMetadata = meta.copy(title = titleToSave) // Description update not supported locally yet
+                             _uiState.update {
+                                 it.copy(
+                                     title = titleToSave,
+                                     isUpdatingDetails = false,
+                                     infoMessage = "Title updated (Description update not supported locally)"
+                                 )
+                             }
+                             viewModelScope.launch { _infoMessageEvent.trySend("Title updated") }
+                         } else {
+                             _uiState.update { it.copy(isUpdatingDetails = false, error = "Failed to update local title") }
+                             viewModelScope.launch { _errorEvent.trySend("Failed to update local title") }
+                         }
                     } else {
-                        Log.d("DetailsViewModel", "Saving local title: '$newTitle' for path: ${meta.filePath}")
-                        success = localAudioRepository.updateRecordingTitle(meta.filePath, newTitle)
-                        if (success) {
-                            currentMetadata = meta.copy(title = newTitle)
-                        } else {
-                            errorMsg = application.getString(R.string.error_metadata_update_failed)
-                        }
+                        _uiState.update { it.copy(isUpdatingDetails = false, error = "Metadata missing") }
                     }
                 }
             } catch (e: Exception) {
-                Log.e("DetailsViewModel", "Exception during title update", e)
-                errorMsg = mapErrorToUserFriendlyMessage(e)
-                success = false
-            }
-
-            if (!success) {
-                Log.e("DetailsViewModel", "Failed to update title. Reverting UI.")
-                _uiState.update {
-                    val currentActualTitle = state.title
-                    it.copy(
-                        isLoading = false, 
-                        title = currentActualTitle,
-                        editableTitle = TextFieldValue(currentActualTitle, selection = TextRange(currentActualTitle.length)),
-                        error = errorMsg
-                    )
-                }
-                viewModelScope.launch { _errorEvent.trySend(errorMsg ?: application.getString(R.string.error_metadata_update_failed)) }
-            } else {
-                Log.d("DetailsViewModel", "Title updated successfully.")
-                val infoMsg = "Title updated."
-                _uiState.update { it.copy(isLoading = false, infoMessage = infoMsg) }
-                viewModelScope.launch { _infoMessageEvent.trySend(infoMsg) }
+                Log.e("DetailsViewModel", "Error updating details", e)
+                val errorMsg = mapErrorToUserFriendlyMessage(e)
+                _uiState.update { it.copy(isUpdatingDetails = false, error = errorMsg) }
+                viewModelScope.launch { _errorEvent.trySend(errorMsg) }
             }
         }
     }
@@ -1074,6 +1174,50 @@ class RecordingDetailsViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e("DetailsViewModel", "Failed to parse Glossary JSON from cache", e)
             null
+        }
+    }
+
+    private fun parseKeyPoints(json: String?): List<String>? {
+        if (json.isNullOrBlank()) return null
+        return try {
+            val type = object : TypeToken<List<String>>() {}.type
+            gson.fromJson(json, type)
+        } catch (e: Exception) {
+            Log.e("DetailsViewModel", "Failed to parse KeyPoints JSON from cache", e)
+            null
+        }
+    }
+
+    fun dismissRecommendation(recommendationId: String) {
+        val currentList = uiState.value.youtubeRecommendations
+        // Check if item exists before proceeding
+        if (currentList.none { it.recommendationId == recommendationId }) return
+
+        // Optimistic Update: Immediately remove from UI
+        _uiState.update {
+            it.copy(youtubeRecommendations = currentList.filter { item -> item.recommendationId != recommendationId })
+        }
+
+        viewModelScope.launch {
+            remoteAudioRepository.dismissRecommendation(recommendationId)
+                .collect { result ->
+                    result.onFailure { e ->
+                        Log.e("DetailsViewModel", "Failed to dismiss recommendation: $recommendationId", e)
+                        val errorMsg = "Failed to dismiss recommendation."
+                        _uiState.update { it.copy(error = errorMsg) }
+                        _errorEvent.trySend(errorMsg)
+                        
+                        // Re-fetch to restore state if needed, or simply let the user try again later.
+                        // Ideally we would restore the item, but re-fetching ensures consistency.
+                        val remoteId = uiState.value.remoteRecordingId ?: uiState.value.cloudId
+                        if (remoteId != null) {
+                            fetchRecommendations(remoteId)
+                        }
+                    }
+                    result.onSuccess {
+                        Log.d("DetailsViewModel", "Recommendation dismissed successfully on server: $recommendationId")
+                    }
+                }
         }
     }
 }

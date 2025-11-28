@@ -64,12 +64,50 @@ public class UserService {
 	public User registerNewUser(RegistrationRequest request)
 			throws FirebaseAuthException, ExecutionException, InterruptedException {
 		log.info("Attempting registration process for email: {}", request.getEmail());
+
+		// Check for existing user in Firestore to prevent duplicates
+		User existingUser = findUserByEmail(request.getEmail());
+
 		String displayName = (request.getFirstName() + " " + request.getLastName()).trim();
 		if (!StringUtils.hasText(displayName)) {
 			displayName = request.getEmail().split("@")[0];
 		}
+
 		UserRecord firebaseUserRecord = firebaseService.createFirebaseUser(request.getEmail(), request.getPassword(),
 				displayName);
+
+		if (existingUser != null) {
+			log.info(
+					"Found existing user profile for email {} (UID: {}). Migrating to new Firebase UID: {} for Email/Password registration.",
+					request.getEmail(), existingUser.getUserId(), firebaseUserRecord.getUid());
+
+			String oldUid = existingUser.getUserId();
+
+			// Update IDs and Provider
+			existingUser.setUserId(firebaseUserRecord.getUid());
+			existingUser.setProvider("email");
+			// Reset providerId as it's not applicable for email/password or use email
+			existingUser.setProviderId(null);
+
+			// Update profile details from registration request
+			if (StringUtils.hasText(displayName)) {
+				existingUser.setDisplayName(displayName);
+			}
+			if (StringUtils.hasText(request.getFirstName())) {
+				existingUser.setFirstName(request.getFirstName());
+			}
+			if (StringUtils.hasText(request.getLastName())) {
+				existingUser.setLastName(request.getLastName());
+			}
+
+			// Delete old UID record
+			deleteUser(oldUid);
+
+			// Save under new UID
+			log.info("Saving migrated user profile to Firestore for new UID: {}", firebaseUserRecord.getUid());
+			return createUser(existingUser);
+		}
+
 		User newUser = new User();
 		newUser.setUserId(firebaseUserRecord.getUid());
 		newUser.setEmail(firebaseUserRecord.getEmail());
@@ -168,8 +206,15 @@ public class UserService {
 				needsUpdate = true;
 			} else if (StringUtils.hasText(existingUser.getProfileImageUrl()) && StringUtils.hasText(photoUrl)
 					&& !Objects.equals(photoUrl, existingUser.getProfileImageUrl())) {
-				log.debug("Keeping existing profile image URL for UID {} as it differs from provider URL '{}'.", uid,
-						photoUrl);
+				if (nhostStorageService.isNhostUrl(existingUser.getProfileImageUrl())) {
+					log.debug("Keeping existing Nhost profile image for UID {}. Ignoring provider URL '{}'.", uid,
+							photoUrl);
+				} else {
+					log.info("Updating profile image for UID {} to match current provider URL. Old: {}", uid,
+							existingUser.getProfileImageUrl());
+					existingUser.setProfileImageUrl(photoUrl);
+					needsUpdate = true;
+				}
 			}
 
 			if (StringUtils.hasText(name) && !StringUtils.hasText(existingUser.getDisplayName())) {
@@ -202,7 +247,52 @@ public class UserService {
 				return existingUser;
 			}
 		} else {
-			log.info("No existing user profile found for UID: {}. Creating new profile.", uid);
+			// Check for existing user by email to prevent duplicates/handle migration
+			if (StringUtils.hasText(email)) {
+				User userByEmail = findUserByEmail(email);
+				if (userByEmail != null) {
+					log.info(
+							"Found existing user by email {} (UID: {}) but current Firebase UID is {}. Migrating profile to new UID.",
+							email, userByEmail.getUserId(), uid);
+
+					String oldUid = userByEmail.getUserId();
+
+					// Update IDs
+					userByEmail.setUserId(uid);
+					userByEmail.setProvider(provider);
+					userByEmail.setProviderId(providerId);
+
+					// Handle Profile Image during migration
+					// If existing image is NOT manual (Nhost), update to new provider image
+					if (StringUtils.hasText(photoUrl)
+							&& !nhostStorageService.isNhostUrl(userByEmail.getProfileImageUrl())) {
+						userByEmail.setProfileImageUrl(photoUrl);
+					}
+
+					// Handle Name during migration
+					if (StringUtils.hasText(name)) {
+						userByEmail.setDisplayName(name);
+						if (!StringUtils.hasText(userByEmail.getFirstName())
+								|| !StringUtils.hasText(userByEmail.getLastName())) {
+							String[] names = name.split(" ", 2);
+							userByEmail.setFirstName(names[0]);
+							if (names.length > 1) {
+								userByEmail.setLastName(names[1]);
+							}
+						}
+					}
+
+					// Save under new UID
+					createUser(userByEmail);
+
+					// Delete old UID record
+					deleteUser(oldUid);
+
+					return userByEmail;
+				}
+			}
+
+			log.info("No existing user profile found for UID: {} or Email: {}. Creating new profile.", uid, email);
 			User newUser = new User();
 			newUser.setUserId(uid);
 			newUser.setEmail(email);

@@ -29,6 +29,7 @@ import io.ktor.http.encodedPath
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -79,6 +80,7 @@ object NetworkModule {
     ): OkHttpClient {
         Log.d(TAG, "Providing OkHttpClient instance")
         return OkHttpClient.Builder()
+            .addInterceptor(DynamicBaseUrlInterceptor())
             .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -241,5 +243,35 @@ object NetworkModule {
     ): NotificationRepository {
          Log.d(TAG, "Providing NotificationRepository implementation.")
          return edu.cit.audioscholar.domain.repository.NotificationRepositoryImpl(httpClient, prefs)
+    }
+
+    class DynamicBaseUrlInterceptor : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val originalRequest = chain.request()
+            val currentUrl = ServerConnectionManager.currentBaseUrl
+            
+            // Safe parsing of the current base URL
+            val newBaseUrl = try {
+                currentUrl.toHttpUrlOrNull()
+            } catch (e: Exception) {
+                null
+            }
+
+            if (newBaseUrl == null) {
+                return chain.proceed(originalRequest)
+            }
+
+            val newUrl = originalRequest.url.newBuilder()
+                .scheme(newBaseUrl.scheme)
+                .host(newBaseUrl.host)
+                .port(newBaseUrl.port)
+                .build()
+
+            val newRequest = originalRequest.newBuilder()
+                .url(newUrl)
+                .build()
+
+            return chain.proceed(newRequest)
+        }
     }
 }

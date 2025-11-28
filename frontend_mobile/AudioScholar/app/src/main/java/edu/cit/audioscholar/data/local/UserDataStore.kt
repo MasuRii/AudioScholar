@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import edu.cit.audioscholar.data.remote.dto.UserProfileDto
@@ -25,6 +26,7 @@ class UserDataStore @Inject constructor(@ApplicationContext private val context:
         val USER_PROFILE_IMAGE_URL = stringPreferencesKey("user_profile_image_url")
         val USER_FIRST_NAME = stringPreferencesKey("user_first_name")
         val USER_LAST_NAME = stringPreferencesKey("user_last_name")
+        val USER_ROLES = stringSetPreferencesKey("user_roles")
     }
 
     val userProfileFlow: Flow<UserProfileDto?> = context.userDataStore.data
@@ -35,6 +37,7 @@ class UserDataStore @Inject constructor(@ApplicationContext private val context:
             val profileImageUrl = preferences[PreferencesKeys.USER_PROFILE_IMAGE_URL]
             val firstName = preferences[PreferencesKeys.USER_FIRST_NAME]
             val lastName = preferences[PreferencesKeys.USER_LAST_NAME]
+            val roles = preferences[PreferencesKeys.USER_ROLES]
 
             if (email != null || userId != null) {
                 UserProfileDto(
@@ -43,7 +46,8 @@ class UserDataStore @Inject constructor(@ApplicationContext private val context:
                     displayName = displayName,
                     profileImageUrl = profileImageUrl,
                     firstName = firstName,
-                    lastName = lastName
+                    lastName = lastName,
+                    roles = roles?.toList()
                 )
             } else {
                 null
@@ -58,6 +62,7 @@ class UserDataStore @Inject constructor(@ApplicationContext private val context:
             profile.profileImageUrl?.let { preferences[PreferencesKeys.USER_PROFILE_IMAGE_URL] = it } ?: preferences.remove(PreferencesKeys.USER_PROFILE_IMAGE_URL)
             profile.firstName?.let { preferences[PreferencesKeys.USER_FIRST_NAME] = it } ?: preferences.remove(PreferencesKeys.USER_FIRST_NAME)
             profile.lastName?.let { preferences[PreferencesKeys.USER_LAST_NAME] = it } ?: preferences.remove(PreferencesKeys.USER_LAST_NAME)
+            profile.roles?.let { preferences[PreferencesKeys.USER_ROLES] = it.toSet() } ?: preferences.remove(PreferencesKeys.USER_ROLES)
         }
     }
 
@@ -69,6 +74,7 @@ class UserDataStore @Inject constructor(@ApplicationContext private val context:
             preferences.remove(PreferencesKeys.USER_PROFILE_IMAGE_URL)
             preferences.remove(PreferencesKeys.USER_FIRST_NAME)
             preferences.remove(PreferencesKeys.USER_LAST_NAME)
+            preferences.remove(PreferencesKeys.USER_ROLES)
         }
     }
 }

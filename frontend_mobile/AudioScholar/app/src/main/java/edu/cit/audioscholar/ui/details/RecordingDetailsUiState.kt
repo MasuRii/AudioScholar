@@ -17,6 +17,7 @@ data class RecordingDetailsUiState(
     val infoMessage: String? = null,
 
     val title: String = "",
+    val description: String = "",
     val dateCreated: String = "",
     val durationMillis: Long = 0L,
     val durationFormatted: String = "00:00",
@@ -37,8 +38,13 @@ data class RecordingDetailsUiState(
     val playbackProgress: Float = 0f,
 
     val summaryStatus: SummaryStatus = SummaryStatus.IDLE,
+    val summaryId: String? = null,
     val summaryText: String = "",
+    val keyPoints: List<String> = emptyList(),
+    val topics: List<String> = emptyList(),
     val glossaryItems: List<GlossaryItemDto> = emptyList(),
+    val showSummaryEditDialog: Boolean = false,
+    val showGlossaryEditDialog: Boolean = false,
 
     val recommendationsStatus: RecommendationsStatus = RecommendationsStatus.IDLE,
     val youtubeRecommendations: List<RecommendationDto> = emptyList(),
@@ -46,6 +52,8 @@ data class RecordingDetailsUiState(
     val attachedPowerPoint: String? = null,
 
     val showDeleteConfirmation: Boolean = false,
+    val showEditDialog: Boolean = false,
+    val isUpdatingDetails: Boolean = false,
 
     val textToCopy: String? = null,
 
@@ -54,7 +62,8 @@ data class RecordingDetailsUiState(
     val isProcessing: Boolean
         get() = uploadProgressPercent != null ||
                 summaryStatus == SummaryStatus.PROCESSING ||
-                recommendationsStatus == RecommendationsStatus.LOADING
+                recommendationsStatus == RecommendationsStatus.LOADING ||
+                isUpdatingDetails
 
     val isPlaybackReady: Boolean
         get() = !isProcessing && !isDeleting && (filePath.isNotEmpty() || !storageUrl.isNullOrBlank() || !audioUrl.isNullOrBlank())

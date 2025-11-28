@@ -38,3 +38,9 @@ build/
 .kiloignore
 
 src/main/resources/uploads/
+
+### Logs ###
+*.log
+logs/
+.logs/
+**/*.log

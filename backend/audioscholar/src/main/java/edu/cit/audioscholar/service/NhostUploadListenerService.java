@@ -179,7 +179,8 @@ public class NhostUploadListenerService {
 
 			updateMetadataAfterUpload(metadata, nhostFileId, isAudio);
 
-			checkUploadCompletionAndTriggerProcessing(metadata);
+			// checkUploadCompletionAndTriggerProcessing(metadata); // Disabled for parallel
+			// processing
 
 			deleteTempFileHelper(tempFilePathStr, metadataId, fileType);
 
@@ -258,6 +259,20 @@ public class NhostUploadListenerService {
 				updates.put("audioOnly", true);
 				metadata.setAudioOnly(true);
 				log.info("[{}] Marking upload as audio-only (no PowerPoint file detected)", metadataId);
+			}
+
+			// Parallel Flow: Trigger Transcription immediately after audio upload
+			log.info("[{}] Audio upload complete. Triggering transcription immediately.", metadataId);
+			AudioProcessingMessage transcriptionMessage = new AudioProcessingMessage();
+			transcriptionMessage.setMetadataId(metadataId);
+			transcriptionMessage.setUserId(userId);
+
+			try {
+				rabbitTemplate.convertAndSend(RabbitMQConfig.PROCESSING_EXCHANGE_NAME,
+						RabbitMQConfig.TRANSCRIPTION_ROUTING_KEY, transcriptionMessage);
+				log.info("[{}] Message sent to transcription queue (Parallel Processing).", metadataId);
+			} catch (Exception e) {
+				log.error("[{}] Failed to send message to transcription queue: {}", metadataId, e.getMessage(), e);
 			}
 
 			String publicUrl = nhostStorageService.getPublicUrl(nhostFileId);

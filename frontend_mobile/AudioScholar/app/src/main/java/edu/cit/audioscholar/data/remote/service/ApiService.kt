@@ -17,6 +17,7 @@ interface ApiService {
         @Part("description") description: RequestBody?
     ): Response<AudioMetadataDto>
 
+    @Headers("Cache-Control: no-cache")
     @GET("/api/audio/metadata")
     suspend fun getAudioMetadataList(): Response<List<AudioMetadataDto>>
 
@@ -82,10 +83,27 @@ interface ApiService {
         @Path("recordingId") recordingId: String
     ): Response<List<RecommendationDto>>
 
-    @GET("/api/recordings/{recordingId}")
+    @GET("/api/audio/recordings/{recordingId}")
     suspend fun getRecordingDetails(
         @Path("recordingId") recordingId: String
     ): Response<AudioMetadataDto>
+
+    @PATCH("/api/audio/recordings/{recordingId}")
+    suspend fun updateRecordingDetails(
+        @Path("recordingId") recordingId: String,
+        @Body request: UpdateRecordingRequest
+    ): Response<AudioMetadataDto>
+
+    @PATCH("/api/summaries/{summaryId}")
+    suspend fun updateSummary(
+        @Path("summaryId") summaryId: String,
+        @Body request: UpdateSummaryRequest
+    ): Response<SummaryResponseDto>
+
+    @DELETE("/api/v1/recommendations/{id}")
+    suspend fun dismissRecommendation(
+        @Path("id") recommendationId: String
+    ): Response<Unit>
 
     @POST("/api/users/me/fcm-token")
     suspend fun registerFcmToken(

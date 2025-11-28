@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import edu.cit.audioscholar.data.local.file.InsufficientStorageException
 import edu.cit.audioscholar.data.local.model.RecordingMetadata
 import edu.cit.audioscholar.data.remote.dto.AudioMetadataDto
+import edu.cit.audioscholar.data.remote.dto.TimestampDto
 import edu.cit.audioscholar.domain.repository.LocalAudioRepository
 import edu.cit.audioscholar.domain.repository.RemoteAudioRepository
 import edu.cit.audioscholar.util.FileUtils
@@ -147,7 +148,7 @@ class LibraryViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(
                                 isLoadingCloud = false,
-                                cloudRecordings = metadataList.sortedByDescending { dto -> dto.uploadTimestamp?.seconds ?: 0L }
+                                cloudRecordings = metadataList
                             )
                         }
                     }.onFailure { throwable ->

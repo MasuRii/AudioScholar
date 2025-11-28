@@ -3,12 +3,10 @@ package edu.cit.audioscholar.integration;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +35,6 @@ public class YouTubeAPIClient {
 	private static final String APPLICATION_NAME = "AudioScholarApp";
 	private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
 
-	private static final List<String> ENGLISH_REGIONS = Arrays.asList("US", "GB", "CA", "AU", "NZ", "IE", "SG");
-
 	private YouTube youtubeService;
 
 	@PostConstruct
@@ -54,13 +50,13 @@ public class YouTubeAPIClient {
 		}
 	}
 
-	public List<SearchResult> searchVideos(List<String> keywords, int maxResults) {
+	public List<SearchResult> searchVideos(List<String> queries, int maxResults) {
 		if (youtubeService == null) {
 			log.error("YouTube service is not initialized. Cannot perform search.");
 			return Collections.emptyList();
 		}
-		if (keywords == null || keywords.isEmpty()) {
-			log.warn("Keywords list is null or empty. Skipping YouTube search.");
+		if (queries == null || queries.isEmpty()) {
+			log.warn("Queries list is null or empty. Skipping YouTube search.");
 			return Collections.emptyList();
 		}
 		if (maxResults <= 0) {
@@ -72,32 +68,31 @@ public class YouTubeAPIClient {
 			maxResults = 50;
 		}
 
-		String queryString = buildQueryString(keywords);
-		log.info("Searching YouTube with query: '{}', maxResults: {}", queryString, maxResults);
-
-		return searchVideosFromMultipleRegions(queryString, maxResults);
-	}
-
-	private List<SearchResult> searchVideosFromMultipleRegions(String queryString, int maxResults) {
-		int resultsPerRegion = Math.min(maxResults, 20);
 		Set<String> uniqueVideoIds = new HashSet<>();
 		List<SearchResult> allResults = new ArrayList<>();
 
-		for (String regionCode : ENGLISH_REGIONS) {
-			if (allResults.size() >= maxResults)
+		// Iterate through each query in the list
+		for (String query : queries) {
+			if (allResults.size() >= maxResults) {
 				break;
+			}
+			if (query == null || query.isBlank()) {
+				continue;
+			}
 
 			try {
-				log.info("Searching YouTube for region: {} with query: '{}'", regionCode, queryString);
-				List<SearchResult> regionResults = executeSearch(queryString, resultsPerRegion, regionCode);
+				// Hardcoded "US" region as per requirements
+				log.info("Searching YouTube for region: US with query: '{}'", query);
+				List<SearchResult> searchResults = executeSearch(query.trim(), maxResults, "US");
 
-				for (SearchResult result : regionResults) {
+				for (SearchResult result : searchResults) {
 					if (result.getId() != null && result.getId().getVideoId() != null) {
 						String videoId = result.getId().getVideoId();
 						if (uniqueVideoIds.add(videoId)) {
 							allResults.add(result);
-							if (allResults.size() >= maxResults)
+							if (allResults.size() >= maxResults) {
 								break;
+							}
 						}
 					}
 				}
@@ -106,32 +101,13 @@ public class YouTubeAPIClient {
 					log.error("YouTube API returned 403 Forbidden (Quota exceeded or API blocked). Stopping search.");
 					throw new RuntimeException("YouTube API Blocked", e);
 				}
-				log.warn("Google API error searching region {}: {}", regionCode, e.getMessage());
+				log.warn("Google API error searching query '{}': {}", query, e.getMessage());
 			} catch (Exception e) {
-				log.warn("Error searching region {}: {}", regionCode, e.getMessage());
+				log.warn("Error searching query '{}': {}", query, e.getMessage());
 			}
 		}
 
-		if (allResults.isEmpty()) {
-			log.info("No results from region-specific searches. Trying default search.");
-			try {
-				List<SearchResult> defaultResults = executeSearch(queryString, maxResults, null);
-				for (SearchResult result : defaultResults) {
-					if (result.getId() != null && result.getId().getVideoId() != null) {
-						String videoId = result.getId().getVideoId();
-						if (uniqueVideoIds.add(videoId)) {
-							allResults.add(result);
-							if (allResults.size() >= maxResults)
-								break;
-						}
-					}
-				}
-			} catch (Exception e) {
-				log.error("Error executing default search: {}", e.getMessage(), e);
-			}
-		}
-
-		log.info("Retrieved {} unique video results across regions", allResults.size());
+		log.info("Retrieved {} unique video results", allResults.size());
 		return allResults;
 	}
 
@@ -167,7 +143,4 @@ public class YouTubeAPIClient {
 		}
 	}
 
-	private String buildQueryString(List<String> keywords) {
-		return keywords.stream().map(String::trim).filter(kw -> !kw.isBlank()).collect(Collectors.joining(" "));
-	}
 }
