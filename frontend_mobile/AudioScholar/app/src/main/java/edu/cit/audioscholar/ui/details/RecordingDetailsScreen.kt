@@ -37,6 +37,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.material3.SuggestionChip
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -214,439 +221,125 @@ fun RecordingDetailsScreen(
                 }
 
                 else -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(16.dp)
-                    ) {
-                        Box {
-                            Column {
-                                Text(
-                                    text = uiState.title,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                if (uiState.description.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = uiState.description,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = LocalContentColor.current.copy(alpha = 0.8f)
-                                    )
-                                }
-                            }
-                        }
+                    var selectedTabIndex by remember { mutableIntStateOf(0) }
+                    val tabs = listOf("Insights", "Resources")
 
-                        Spacer(modifier = Modifier.height(5.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(16.dp), tint = LocalContentColor.current.copy(alpha = 0.7f))
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Persistent Header Section
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            // Title & Description
                             Text(
-                                text = uiState.dateCreated,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = LocalContentColor.current.copy(alpha = 0.7f)
-                            )
-                            Text("•", style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = 0.7f))
-                            Icon(Icons.Filled.Timer, contentDescription = null, modifier = Modifier.size(16.dp), tint = LocalContentColor.current.copy(alpha = 0.7f))
-                            Text(
-                                text = uiState.durationFormatted,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = LocalContentColor.current.copy(alpha = 0.7f)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(stringResource(R.string.details_playback_title), style = MaterialTheme.typography.titleMedium)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        val isPlaybackEnabled = uiState.isPlaybackReady
-                        if (uiState.filePath.isNotEmpty() || uiState.storageUrl != null || uiState.audioUrl != null) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
+                                text = uiState.title,
+                                style = MaterialTheme.typography.headlineSmall,
+                                fontWeight = FontWeight.Bold,
                                 modifier = Modifier.fillMaxWidth()
-                            ) {
-                                IconButton(
-                                    onClick = viewModel::onPlayPauseToggle,
-                                    enabled = isPlaybackEnabled
-                                ) {
-                                    Icon(
-                                        imageVector = if (uiState.isPlaying) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
-                                        contentDescription = if (uiState.isPlaying) stringResource(R.string.cd_pause_playback) else stringResource(R.string.cd_play_playback),
-                                        modifier = Modifier.size(48.dp),
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Slider(
-                                    value = uiState.playbackProgress,
-                                    onValueChange = viewModel::onSeek,
-                                    modifier = Modifier.weight(1f),
-                                    enabled = isPlaybackEnabled
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                            )
+                            if (uiState.description.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "${uiState.currentPositionFormatted} / ${uiState.durationFormatted}",
-                                    style = MaterialTheme.typography.bodySmall
+                                    text = uiState.description,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = LocalContentColor.current.copy(alpha = 0.8f)
                                 )
                             }
-                        } else {
-                            Text("Playback unavailable.", style = MaterialTheme.typography.bodyMedium)
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        if (uiState.filePath.isNotEmpty() && uiState.remoteRecordingId == null && !uiState.isProcessing) {
-                            Button(
-                                onClick = viewModel::onProcessRecordingClicked,
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !uiState.isProcessing
-                            ) {
-                                Icon(
-                                    Icons.Filled.CloudUpload,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(ButtonDefaults.IconSize)
-                                )
-                                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                Text(stringResource(R.string.details_process_recording_button))
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-
-                        if (uiState.showCloudInfo || uiState.summaryStatus != SummaryStatus.IDLE) {
-                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // Metadata Row
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(stringResource(R.string.details_summary_title), style = MaterialTheme.typography.titleMedium)
-
-                                if (uiState.summaryStatus == SummaryStatus.READY && !uiState.isProcessing) {
+                                Icon(Icons.Filled.DateRange, contentDescription = null, modifier = Modifier.size(16.dp), tint = LocalContentColor.current.copy(alpha = 0.7f))
+                                Text(
+                                    text = uiState.dateCreated,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = LocalContentColor.current.copy(alpha = 0.7f)
+                                )
+                                Text("•", style = MaterialTheme.typography.bodyMedium, color = LocalContentColor.current.copy(alpha = 0.7f))
+                                Icon(Icons.Filled.Timer, contentDescription = null, modifier = Modifier.size(16.dp), tint = LocalContentColor.current.copy(alpha = 0.7f))
+                                Text(
+                                    text = uiState.durationFormatted,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = LocalContentColor.current.copy(alpha = 0.7f)
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            // Playback Controls
+                            Text(stringResource(R.string.details_playback_title), style = MaterialTheme.typography.titleMedium)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val isPlaybackEnabled = uiState.isPlaybackReady
+                            if (uiState.filePath.isNotEmpty() || uiState.storageUrl != null || uiState.audioUrl != null) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
                                     IconButton(
-                                        onClick = viewModel::openSummaryEditDialog,
-                                        modifier = Modifier.size(24.dp)
+                                        onClick = viewModel::onPlayPauseToggle,
+                                        enabled = isPlaybackEnabled
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Filled.Edit,
-                                            contentDescription = "Edit Summary",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
+                                            imageVector = if (uiState.isPlaying) Icons.Filled.PauseCircle else Icons.Filled.PlayCircle,
+                                            contentDescription = if (uiState.isPlaying) stringResource(R.string.cd_pause_playback) else stringResource(R.string.cd_play_playback),
+                                            modifier = Modifier.size(48.dp),
                                         )
                                     }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            if (uiState.summaryStatus != SummaryStatus.IDLE) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(16.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = stringResource(R.string.details_summary_status_label),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            when (uiState.summaryStatus) {
-                                                SummaryStatus.PROCESSING -> {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.size(16.dp),
-                                                        strokeWidth = 2.dp,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Processing...", style = MaterialTheme.typography.labelMedium, color = LocalContentColor.current.copy(alpha = 0.7f))
-                                                }
-                                                SummaryStatus.READY -> {
-                                                    Icon(Icons.Filled.CheckCircle, contentDescription = stringResource(R.string.cd_summary_ready), tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Ready", style = MaterialTheme.typography.labelMedium, color = Color(0xFF2E7D32))
-                                                }
-                                                SummaryStatus.FAILED -> {
-                                                    Icon(Icons.Filled.Error, contentDescription = stringResource(R.string.cd_summary_failed), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Failed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-                                                }
-                                                SummaryStatus.IDLE -> {}
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        if (uiState.summaryStatus == SummaryStatus.READY) {
-                                            MarkdownText(
-                                                markdown = uiState.summaryText.ifBlank { stringResource(R.string.details_summary_placeholder) },
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            if (uiState.summaryText.isNotEmpty() || uiState.keyPoints.isNotEmpty()) {
-                                                Spacer(modifier = Modifier.height(12.dp))
-                                                Button(
-                                                    onClick = viewModel::onCopySummaryAndNotes,
-                                                    modifier = Modifier.align(Alignment.End),
-                                                    enabled = !uiState.isProcessing
-                                                ) {
-                                                    Icon(
-                                                        Icons.Filled.ContentCopy,
-                                                        contentDescription = stringResource(R.string.cd_copy_summary_notes),
-                                                        modifier = Modifier.size(ButtonDefaults.IconSize)
-                                                    )
-                                                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                                    Text(stringResource(R.string.details_summary_copy_button))
-                                                }
-                                            }
-                                        } else if (uiState.summaryStatus == SummaryStatus.FAILED) {
-                                            Text(
-                                                text = uiState.error ?: "Failed to load summary.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.error
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
-                        }
-
-                        if (uiState.showCloudInfo || uiState.summaryStatus != SummaryStatus.IDLE) {
-                            HorizontalDivider()
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(stringResource(R.string.details_notes_title), style = MaterialTheme.typography.titleMedium)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Box(modifier = Modifier.padding(16.dp).fillMaxWidth().defaultMinSize(minHeight = 50.dp)) {
-                                    when (uiState.summaryStatus) {
-                                        SummaryStatus.PROCESSING -> {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(24.dp),
-                                                    strokeWidth = 2.dp,
-                                                    color = MaterialTheme.colorScheme.primary
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = "Generating notes...",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = LocalContentColor.current.copy(alpha = 0.7f)
-                                                )
-                                            }
-                                        }
-                                        SummaryStatus.READY -> {
-                                            if (uiState.keyPoints.isNotEmpty()) {
-                                                Column {
-                                                    uiState.keyPoints.forEachIndexed { index, point ->
-                                                        Row(modifier = Modifier.fillMaxWidth()) {
-                                                            Text(
-                                                                text = "•",
-                                                                style = MaterialTheme.typography.bodyMedium,
-                                                                modifier = Modifier.padding(end = 8.dp)
-                                                            )
-                                                            Text(
-                                                                text = point,
-                                                                style = MaterialTheme.typography.bodyMedium
-                                                            )
-                                                        }
-                                                        if (index < uiState.keyPoints.lastIndex) {
-                                                            Spacer(modifier = Modifier.height(4.dp))
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                Text(
-                                                    text = stringResource(R.string.details_notes_placeholder),
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    color = LocalContentColor.current.copy(alpha = 0.5f),
-                                                    modifier = Modifier.align(Alignment.Center)
-                                                )
-                                            }
-                                        }
-                                        SummaryStatus.FAILED -> {
-                                            Text(
-                                                text = stringResource(R.string.details_notes_failed),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.align(Alignment.Center)
-                                            )
-                                        }
-                                        SummaryStatus.IDLE -> {
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (uiState.isCloudSource) 
-                                   stringResource(R.string.details_powerpoint_pdf_title) 
-                                   else stringResource(R.string.details_powerpoint_title),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            if (uiState.isCloudSource) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    if (uiState.generatedPdfUrl.isNullOrBlank()) {
-                                        Text(
-                                            text = stringResource(R.string.details_pdf_not_available),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = LocalContentColor.current.copy(alpha = 0.7f),
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    } else {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                text = stringResource(R.string.details_pdf_available),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        Spacer(Modifier.width(16.dp))
-                                        Button(
-                                            onClick = { 
-                                                uiState.generatedPdfUrl?.let { pdfUrl ->
-                                                    viewModel.onOpenUrl(pdfUrl)
-                                                }
-                                            }
-                                        ) {
-                                            Icon(Icons.Filled.PictureAsPdf, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                            Text(stringResource(R.string.details_view_pdf_button))
-                                        }
-                                    }
-                                }
-                            } else {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    val currentAttachment = uiState.attachedPowerPoint
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            text = currentAttachment ?: stringResource(R.string.details_powerpoint_none_attached),
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            color = if (currentAttachment == null) LocalContentColor.current.copy(alpha = 0.7f) else LocalContentColor.current
-                                        )
-                                    }
-                                    Spacer(Modifier.width(16.dp))
-                                    val buttonsEnabled = !uiState.isProcessing && !uiState.isDeleting && !uiState.isCloudSource
-                                    Button(
-                                        onClick = {
-                                            if (currentAttachment == null) {
-                                                viewModel.requestAttachPowerPoint()
-                                            } else {
-                                                viewModel.detachPowerPoint()
-                                            }
-                                        },
-                                        enabled = buttonsEnabled
-                                    ) {
-                                        val icon = if (currentAttachment == null) Icons.Filled.AttachFile else Icons.Filled.LinkOff
-                                        val textRes = if (currentAttachment == null) R.string.details_powerpoint_attach_button else R.string.details_powerpoint_detach_button
-                                        Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                        Text(stringResource(textRes))
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        if (uiState.showCloudInfo || uiState.recommendationsStatus != RecommendationsStatus.IDLE) {
-                            HorizontalDivider()
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                stringResource(R.string.details_youtube_title),
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            when(uiState.recommendationsStatus) {
-                                RecommendationsStatus.LOADING -> {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            strokeWidth = 2.dp,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Loading recommendations...",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = LocalContentColor.current.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                }
-                                RecommendationsStatus.READY -> {
-                                    if (uiState.youtubeRecommendations.isNotEmpty()) {
-                                        LazyRow(
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                            contentPadding = PaddingValues(horizontal = 4.dp)
-                                        ) {
-                                            items(items = uiState.youtubeRecommendations, key = { it.recommendationId ?: it.videoId ?: it.hashCode() }) { video ->
-                                                YouTubeRecommendationCard(
-                                                    video = video,
-                                                    onClick = { viewModel.onWatchYouTubeVideo(video) },
-                                                    onDismiss = {
-                                                        video.recommendationId?.let { id ->
-                                                            viewModel.dismissRecommendation(id)
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    } else {
-                                        Text(
-                                            text = "No relevant videos found.",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = LocalContentColor.current.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                }
-                                RecommendationsStatus.FAILED -> {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Slider(
+                                        value = uiState.playbackProgress,
+                                        onValueChange = viewModel::onSeek,
+                                        modifier = Modifier.weight(1f),
+                                        enabled = isPlaybackEnabled
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = if (uiState.error?.contains("Recommendations Error") == true) uiState.error!! else "Failed to load recommendations.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.error
+                                        text = "${uiState.currentPositionFormatted} / ${uiState.durationFormatted}",
+                                        style = MaterialTheme.typography.bodySmall
                                     )
                                 }
-                                RecommendationsStatus.IDLE -> {
+                            } else {
+                                Text("Playback unavailable.", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            
+                            // Process Recording Button (if available)
+                            if (uiState.filePath.isNotEmpty() && uiState.remoteRecordingId == null && !uiState.isProcessing) {
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = viewModel::onProcessRecordingClicked,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !uiState.isProcessing
+                                ) {
+                                    Icon(
+                                        Icons.Filled.CloudUpload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                                    )
+                                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                    Text(stringResource(R.string.details_process_recording_button))
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        // Tab Row
+                        TabRow(selectedTabIndex = selectedTabIndex) {
+                            tabs.forEachIndexed { index, title ->
+                                Tab(
+                                    selected = selectedTabIndex == index,
+                                    onClick = { selectedTabIndex = index },
+                                    text = { Text(title) }
+                                )
+                            }
+                        }
+
+                        // Tab Content
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            when (selectedTabIndex) {
+                                0 -> InsightsTabContent(uiState, viewModel)
+                                1 -> ResourcesTabContent(uiState, viewModel)
+                            }
+                        }
                     }
                 }
             }
@@ -731,7 +424,7 @@ fun RecordingDetailsScreen(
                 initialKeyPoints = uiState.keyPoints,
                 onDismiss = viewModel::closeSummaryEditDialog,
                 onConfirm = { summary, keyPoints ->
-                    viewModel.updateSummaryContent(summary, keyPoints, uiState.glossaryItems)
+                    viewModel.updateSummaryContent(summary, keyPoints, uiState.topics, uiState.glossaryItems)
                 }
             )
         }
@@ -994,5 +687,417 @@ fun SummaryEditDialog(
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }
+    }
+}
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun InsightsTabContent(
+    uiState: RecordingDetailsUiState,
+    viewModel: RecordingDetailsViewModel
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        // Topics Section
+        if (uiState.topics.isNotEmpty()) {
+            Text(
+                text = "Topics",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                uiState.topics.forEach { topic ->
+                    SuggestionChip(
+                        onClick = { /* No action */ },
+                        label = { Text(topic) }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Summary Section
+        if (uiState.showCloudInfo || uiState.summaryStatus != SummaryStatus.IDLE) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(stringResource(R.string.details_summary_title), style = MaterialTheme.typography.titleMedium)
+
+                if (uiState.summaryStatus == SummaryStatus.READY && !uiState.isProcessing) {
+                    IconButton(
+                        onClick = viewModel::openSummaryEditDialog,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "Edit Summary",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (uiState.summaryStatus != SummaryStatus.IDLE) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = stringResource(R.string.details_summary_status_label),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            when (uiState.summaryStatus) {
+                                SummaryStatus.PROCESSING -> {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Processing...", style = MaterialTheme.typography.labelMedium, color = LocalContentColor.current.copy(alpha = 0.7f))
+                                }
+                                SummaryStatus.READY -> {
+                                    Icon(Icons.Filled.CheckCircle, contentDescription = stringResource(R.string.cd_summary_ready), tint = Color(0xFF2E7D32), modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Ready", style = MaterialTheme.typography.labelMedium, color = Color(0xFF2E7D32))
+                                }
+                                SummaryStatus.FAILED -> {
+                                    Icon(Icons.Filled.Error, contentDescription = stringResource(R.string.cd_summary_failed), tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Failed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                                }
+                                SummaryStatus.IDLE -> {}
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        if (uiState.summaryStatus == SummaryStatus.READY) {
+                            MarkdownText(
+                                markdown = uiState.summaryText.ifBlank { stringResource(R.string.details_summary_placeholder) },
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (uiState.summaryText.isNotEmpty() || uiState.keyPoints.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = viewModel::onCopySummaryAndNotes,
+                                    modifier = Modifier.align(Alignment.End),
+                                    enabled = !uiState.isProcessing
+                                ) {
+                                    Icon(
+                                        Icons.Filled.ContentCopy,
+                                        contentDescription = stringResource(R.string.cd_copy_summary_notes),
+                                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                                    )
+                                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                    Text(stringResource(R.string.details_summary_copy_button))
+                                }
+                            }
+                        } else if (uiState.summaryStatus == SummaryStatus.FAILED) {
+                            Text(
+                                text = uiState.error ?: "Failed to load summary.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        // Key Points Section
+        if (uiState.showCloudInfo || uiState.summaryStatus != SummaryStatus.IDLE) {
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(stringResource(R.string.details_notes_title), style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Box(modifier = Modifier.padding(16.dp).fillMaxWidth().defaultMinSize(minHeight = 50.dp)) {
+                    when (uiState.summaryStatus) {
+                        SummaryStatus.PROCESSING -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Generating notes...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = LocalContentColor.current.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        SummaryStatus.READY -> {
+                            if (uiState.keyPoints.isNotEmpty()) {
+                                Column {
+                                    uiState.keyPoints.forEachIndexed { index, point ->
+                                        Row(modifier = Modifier.fillMaxWidth()) {
+                                            Text(
+                                                text = "•",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.padding(end = 8.dp)
+                                            )
+                                            Text(
+                                                text = point,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                        if (index < uiState.keyPoints.lastIndex) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.details_notes_placeholder),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = LocalContentColor.current.copy(alpha = 0.5f),
+                                    modifier = Modifier.align(Alignment.Center)
+                                )
+                            }
+                        }
+                        SummaryStatus.FAILED -> {
+                            Text(
+                                text = stringResource(R.string.details_notes_failed),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
+                        SummaryStatus.IDLE -> {
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun ResourcesTabContent(
+    uiState: RecordingDetailsUiState,
+    viewModel: RecordingDetailsViewModel
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
+        // Recommendations Section
+        if (uiState.showCloudInfo || uiState.recommendationsStatus != RecommendationsStatus.IDLE) {
+            Text(
+                stringResource(R.string.details_youtube_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            when(uiState.recommendationsStatus) {
+                RecommendationsStatus.LOADING -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Loading recommendations...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = LocalContentColor.current.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                RecommendationsStatus.READY -> {
+                    if (uiState.youtubeRecommendations.isNotEmpty()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            items(items = uiState.youtubeRecommendations, key = { it.recommendationId ?: it.videoId ?: it.hashCode() }) { video ->
+                                YouTubeRecommendationCard(
+                                    video = video,
+                                    onClick = { viewModel.onWatchYouTubeVideo(video) },
+                                    onDismiss = {
+                                        video.recommendationId?.let { id ->
+                                            viewModel.dismissRecommendation(id)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "No relevant videos found.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = LocalContentColor.current.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                RecommendationsStatus.FAILED -> {
+                    Text(
+                        text = if (uiState.error?.contains("Recommendations Error") == true) uiState.error else "Failed to load recommendations.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                RecommendationsStatus.IDLE -> {
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Glossary Section
+        if (uiState.glossaryItems.isNotEmpty()) {
+            Text(
+                text = "Glossary",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            uiState.glossaryItems.forEach { item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = item.term ?: "Unknown Term",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = item.definition ?: "No definition available.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // PowerPoint/PDF Section
+        Text(
+            text = if (uiState.isCloudSource) 
+                   stringResource(R.string.details_powerpoint_pdf_title) 
+                   else stringResource(R.string.details_powerpoint_title),
+            style = MaterialTheme.typography.titleMedium
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            if (uiState.isCloudSource) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    if (uiState.generatedPdfUrl.isNullOrBlank()) {
+                        Text(
+                            text = stringResource(R.string.details_pdf_not_available),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = LocalContentColor.current.copy(alpha = 0.7f),
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.details_pdf_available),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Button(
+                            onClick = {
+                                uiState.generatedPdfUrl.let { pdfUrl ->
+                                    viewModel.onOpenUrl(pdfUrl)
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Filled.PictureAsPdf, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                            Text(stringResource(R.string.details_view_pdf_button))
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val currentAttachment = uiState.attachedPowerPoint
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = currentAttachment ?: stringResource(R.string.details_powerpoint_none_attached),
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (currentAttachment == null) LocalContentColor.current.copy(alpha = 0.7f) else LocalContentColor.current
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    val buttonsEnabled = !uiState.isProcessing && !uiState.isDeleting && !uiState.isCloudSource
+                    Button(
+                        onClick = {
+                            if (currentAttachment == null) {
+                                viewModel.requestAttachPowerPoint()
+                            } else {
+                                viewModel.detachPowerPoint()
+                            }
+                        },
+                        enabled = buttonsEnabled
+                    ) {
+                        val icon = if (currentAttachment == null) Icons.Filled.AttachFile else Icons.Filled.LinkOff
+                        val textRes = if (currentAttachment == null) R.string.details_powerpoint_attach_button else R.string.details_powerpoint_detach_button
+                        Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text(stringResource(textRes))
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }

@@ -411,6 +411,7 @@ class RemoteAudioRepositoryImpl @Inject constructor(
         summaryId: String,
         newContent: String,
         keyPoints: List<String>?,
+        topics: List<String>?,
         glossary: List<GlossaryItemDto>?
     ): Flow<Result<SummaryResponseDto>> = flow {
         try {
@@ -418,6 +419,7 @@ class RemoteAudioRepositoryImpl @Inject constructor(
             val request = UpdateSummaryRequest(
                 formattedSummaryText = newContent,
                 keyPoints = keyPoints,
+                topics = topics,
                 glossary = glossary
             )
             val response = apiService.updateSummary(summaryId, request)

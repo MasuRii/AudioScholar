@@ -145,9 +145,10 @@ class RecordingDetailsViewModel @Inject constructor(
                         val cacheTimestamp = metadata.cacheTimestampMillis
                         val cachedSummary = metadata.cachedSummaryText
                         val cachedGlossary = metadata.cachedGlossaryItems
+                        val cachedKeyPoints = metadata.cachedKeyPoints
                         val cachedRecs = metadata.cachedRecommendations
 
-                        val isSummaryCacheValid = isCacheValid(cacheTimestamp) && !cachedSummary.isNullOrBlank()
+                        val isSummaryCacheValid = isCacheValid(cacheTimestamp) && (!cachedSummary.isNullOrBlank() || !cachedKeyPoints.isNullOrEmpty())
                         val areRecommendationsCacheValid = isCacheValid(cacheTimestamp) && !cachedRecs.isNullOrEmpty()
 
                         Log.d("DetailsViewModel", "Local metadata loaded. RemoteId: $remoteId, CacheTime: $cacheTimestamp, SummaryCacheValid: $isSummaryCacheValid, RecsCacheValid: $areRecommendationsCacheValid")
@@ -180,7 +181,10 @@ class RecordingDetailsViewModel @Inject constructor(
                                 error = null,
                                 summaryStatus = nextSummaryStatus,
                                 recommendationsStatus = nextRecsStatus,
+                                summaryId = metadata.summaryId,
                                 summaryText = if (isSummaryCacheValid) cachedSummary ?: "" else "",
+                                keyPoints = if (isSummaryCacheValid) cachedKeyPoints ?: emptyList() else emptyList(),
+                                topics = if (isSummaryCacheValid) metadata.cachedTopics ?: emptyList() else emptyList(),
                                 glossaryItems = if (isSummaryCacheValid) cachedGlossary ?: emptyList() else emptyList(),
                                 youtubeRecommendations = if (areRecommendationsCacheValid) cachedRecs ?: emptyList() else emptyList(),
                                 isCloudSource = false
@@ -418,6 +422,7 @@ class RecordingDetailsViewModel @Inject constructor(
                     summaryId = summaryDto.summaryId,
                     summaryText = summaryDto.formattedSummaryText ?: "",
                     keyPoints = summaryDto.keyPoints ?: emptyList(),
+                    topics = summaryDto.topics ?: emptyList(),
                     glossaryItems = summaryDto.glossary ?: emptyList(),
                     error = null
                 )
@@ -474,6 +479,9 @@ class RecordingDetailsViewModel @Inject constructor(
                 val updatedMeta = localMeta.copy(
                     cachedSummaryText = summaryDto.formattedSummaryText,
                     cachedGlossaryItems = summaryDto.glossary,
+                    cachedKeyPoints = summaryDto.keyPoints,
+                    cachedTopics = summaryDto.topics,
+                    summaryId = summaryDto.summaryId,
                     cacheTimestampMillis = cacheTimestamp
                 )
                 Log.d("DetailsViewModel", "[Cache] Saving fetched summary data to local cache for ${localMeta.filePath}")
@@ -591,11 +599,11 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                 }
                 
-                if (powerpointFile?.exists() != true || powerpointFile?.length() == 0L) {
+                if (powerpointFile.exists() != true || powerpointFile.length() == 0L) {
                     Log.e("DetailsViewModel", "Failed to create temporary PowerPoint file or file is empty")
                     powerpointFile = null
                 } else {
-                    Log.d("DetailsViewModel", "PowerPoint temp file created successfully: ${powerpointFile?.length()} bytes")
+                    Log.d("DetailsViewModel", "PowerPoint temp file created successfully: ${powerpointFile.length()} bytes")
                 }
                 
             } catch (e: Exception) {
@@ -700,7 +708,7 @@ class RecordingDetailsViewModel @Inject constructor(
                         }
                         is UploadResult.Error -> {
                             Log.e("DetailsViewModel", "Upload status: Error - ${result.message}")
-                            val userFriendlyError = result.message ?: application.getString(R.string.error_upload_failed_generic)
+                            val userFriendlyError = result.message
 
                             _uiState.update { it.copy(
                                 uploadProgressPercent = null,
@@ -727,7 +735,7 @@ class RecordingDetailsViewModel @Inject constructor(
 
     private fun getFileExtensionFromUri(uri: Uri): String? {
         val fileName = getFileNameFromUri(uri)
-        return fileName?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() }
+        return fileName.substringAfterLast('.', "").takeIf { it.isNotEmpty() }
     }
 
     private fun mapErrorToUserFriendlyMessage(e: Throwable, default: String = "An error occurred."): String {
@@ -1006,6 +1014,7 @@ class RecordingDetailsViewModel @Inject constructor(
     fun updateSummaryContent(
         content: String,
         keyPoints: List<String>,
+        topics: List<String>,
         glossary: List<GlossaryItemDto>
     ) {
         val state = _uiState.value
@@ -1021,13 +1030,14 @@ class RecordingDetailsViewModel @Inject constructor(
         _uiState.update { it.copy(isUpdatingDetails = true, showSummaryEditDialog = false) }
 
         viewModelScope.launch {
-            remoteAudioRepository.updateSummary(summaryId, content, keyPoints, glossary)
+            remoteAudioRepository.updateSummary(summaryId, content, keyPoints, topics, glossary)
                 .collect { result ->
                     result.onSuccess { updatedDto ->
                         _uiState.update {
                             it.copy(
                                 summaryText = updatedDto.formattedSummaryText ?: content,
                                 keyPoints = updatedDto.keyPoints ?: keyPoints,
+                                topics = updatedDto.topics ?: topics,
                                 glossaryItems = updatedDto.glossary ?: glossary,
                                 isUpdatingDetails = false,
                                 infoMessage = "Summary updated successfully"

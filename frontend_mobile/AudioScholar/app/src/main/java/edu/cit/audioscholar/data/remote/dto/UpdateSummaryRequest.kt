@@ -9,6 +9,9 @@ data class UpdateSummaryRequest(
     @SerializedName("keyPoints")
     val keyPoints: List<String>? = null,
 
+    @SerializedName("topics")
+    val topics: List<String>? = null,
+
     @SerializedName("glossary")
     val glossary: List<GlossaryItemDto>? = null
 )

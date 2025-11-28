@@ -82,7 +82,6 @@ object ServerConnectionManager {
                 // 401/403 (Unauthorized/Forbidden) - all imply server is reachable
                 val isAlive = response.isSuccessful ||
                         code in 300..399 ||
-                        code == 404 ||
                         code == 401 ||
                         code == 403
                 Log.d("ServerCheck", "[$tag] $url -> Code: $code, Alive: $isAlive")

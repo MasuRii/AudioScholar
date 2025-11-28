@@ -41,6 +41,7 @@ data class RecordingDetailsUiState(
     val summaryId: String? = null,
     val summaryText: String = "",
     val keyPoints: List<String> = emptyList(),
+    val topics: List<String> = emptyList(),
     val glossaryItems: List<GlossaryItemDto> = emptyList(),
     val showSummaryEditDialog: Boolean = false,
 

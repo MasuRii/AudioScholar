@@ -20,5 +20,8 @@ data class AudioMetadataDto(
     val uploadTimestamp: TimestampDto? = null,
     val status: String? = null,
     val recordingId: String? = null,
-    val summaryId: String? = null
+    val summaryId: String? = null,
+    val gptSummary: String? = null,
+    val transcriptText: String? = null,
+    val durationSeconds: Int? = null
 )

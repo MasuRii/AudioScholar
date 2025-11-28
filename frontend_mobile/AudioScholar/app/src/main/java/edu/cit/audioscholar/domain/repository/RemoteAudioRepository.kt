@@ -33,6 +33,7 @@ interface RemoteAudioRepository {
         summaryId: String,
         newContent: String,
         keyPoints: List<String>?,
+        topics: List<String>?,
         glossary: List<GlossaryItemDto>?
     ): Flow<Result<SummaryResponseDto>>
 

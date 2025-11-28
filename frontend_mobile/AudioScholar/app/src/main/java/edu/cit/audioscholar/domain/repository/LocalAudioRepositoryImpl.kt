@@ -125,6 +125,9 @@ class LocalAudioRepositoryImpl @Inject constructor(
                 remoteRecordingId = parsedMetadata?.remoteRecordingId,
                 cachedSummaryText = parsedMetadata?.cachedSummaryText,
                 cachedGlossaryItems = parsedMetadata?.cachedGlossaryItems,
+                cachedKeyPoints = parsedMetadata?.cachedKeyPoints,
+                cachedTopics = parsedMetadata?.cachedTopics,
+                summaryId = parsedMetadata?.summaryId,
                 cachedRecommendations = parsedMetadata?.cachedRecommendations,
                 cacheTimestampMillis = parsedMetadata?.cacheTimestampMillis
             )
@@ -205,6 +208,9 @@ class LocalAudioRepositoryImpl @Inject constructor(
                         remoteRecordingId = parsedMetadata?.remoteRecordingId,
                         cachedSummaryText = parsedMetadata?.cachedSummaryText,
                         cachedGlossaryItems = parsedMetadata?.cachedGlossaryItems,
+                        cachedKeyPoints = parsedMetadata?.cachedKeyPoints,
+                        cachedTopics = parsedMetadata?.cachedTopics,
+                        summaryId = parsedMetadata?.summaryId,
                         cachedRecommendations = parsedMetadata?.cachedRecommendations,
                         cacheTimestampMillis = parsedMetadata?.cacheTimestampMillis
                     )
@@ -428,6 +434,9 @@ class LocalAudioRepositoryImpl @Inject constructor(
             remoteRecordingId = null,
             cachedSummaryText = null,
             cachedGlossaryItems = null,
+            cachedKeyPoints = null,
+            cachedTopics = null,
+            summaryId = null,
             cachedRecommendations = null,
             cacheTimestampMillis = null
         )
@@ -485,6 +494,9 @@ class LocalAudioRepositoryImpl @Inject constructor(
             remoteRecordingId = null,
             cachedSummaryText = null,
             cachedGlossaryItems = null,
+            cachedKeyPoints = null,
+            cachedTopics = null,
+            summaryId = null,
             cachedRecommendations = null,
             cacheTimestampMillis = null
         )
