@@ -176,6 +176,28 @@ public class AudioController {
 		}
 	}
 
+	@GetMapping("/recordings/{recordingId}")
+	@PreAuthorize("isAuthenticated()")
+	public ResponseEntity<?> getRecordingDetails(@PathVariable String recordingId) {
+		log.info("Received request to GET /api/audio/recordings/{}", recordingId);
+		Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+		String userId = authentication.getName();
+
+		AudioMetadata metadata = firebaseService.getAudioMetadataByRecordingId(recordingId);
+		if (metadata == null) {
+			log.warn("AudioMetadata not found for recording ID: {}", recordingId);
+			return ResponseEntity.notFound().build();
+		}
+
+		if (!userId.equals(metadata.getUserId())) {
+			log.warn("User {} attempted to access recording {} owned by user {}", userId, recordingId,
+					metadata.getUserId());
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+		}
+
+		return ResponseEntity.ok(metadata);
+	}
+
 	@PatchMapping("/recordings/{recordingId}")
 	@PreAuthorize("isAuthenticated()")
 	public ResponseEntity<?> updateRecording(@PathVariable String recordingId,
