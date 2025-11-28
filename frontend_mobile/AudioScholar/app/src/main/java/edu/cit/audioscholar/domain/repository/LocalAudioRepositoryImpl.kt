@@ -129,7 +129,8 @@ class LocalAudioRepositoryImpl @Inject constructor(
                 cachedTopics = parsedMetadata?.cachedTopics,
                 summaryId = parsedMetadata?.summaryId,
                 cachedRecommendations = parsedMetadata?.cachedRecommendations,
-                cacheTimestampMillis = parsedMetadata?.cacheTimestampMillis
+                cacheTimestampMillis = parsedMetadata?.cacheTimestampMillis,
+                attachmentUri = parsedMetadata?.attachmentUri
             )
             metadataResult = Result.success(finalMetadata)
 
@@ -212,7 +213,8 @@ class LocalAudioRepositoryImpl @Inject constructor(
                         cachedTopics = parsedMetadata?.cachedTopics,
                         summaryId = parsedMetadata?.summaryId,
                         cachedRecommendations = parsedMetadata?.cachedRecommendations,
-                        cacheTimestampMillis = parsedMetadata?.cacheTimestampMillis
+                        cacheTimestampMillis = parsedMetadata?.cacheTimestampMillis,
+                        attachmentUri = parsedMetadata?.attachmentUri
                     )
                 )
             } catch (e: Exception) {
@@ -294,6 +296,24 @@ class LocalAudioRepositoryImpl @Inject constructor(
             saveMetadata(updatedMetadata)
         } catch (e: Exception) {
             Log.e(TAG_LOCAL_REPO, "Failed to update remoteId for $localFilePath", e)
+            false
+        }
+    }
+
+    override suspend fun updateAttachmentUri(filePath: String, uri: String?): Boolean = withContext(Dispatchers.IO) {
+        Log.d(TAG_LOCAL_REPO, "Attempting to update attachmentUri for $filePath to '$uri'")
+        val jsonFile = getJsonFileForAudio(filePath) ?: return@withContext false
+        if (!jsonFile.exists()) {
+            Log.w(TAG_LOCAL_REPO, "Metadata JSON file not found for $filePath, cannot update attachmentUri.")
+            return@withContext false
+        }
+
+        try {
+            val currentMetadata = gson.fromJson(jsonFile.readText(), RecordingMetadata::class.java)
+            val updatedMetadata = currentMetadata.copy(attachmentUri = uri)
+            saveMetadata(updatedMetadata)
+        } catch (e: Exception) {
+            Log.e(TAG_LOCAL_REPO, "Failed to update attachmentUri for $filePath", e)
             false
         }
     }
@@ -438,7 +458,8 @@ class LocalAudioRepositoryImpl @Inject constructor(
             cachedTopics = null,
             summaryId = null,
             cachedRecommendations = null,
-            cacheTimestampMillis = null
+            cacheTimestampMillis = null,
+            attachmentUri = null
         )
 
         val metadataSaved = saveMetadata(metadata)
@@ -498,7 +519,8 @@ class LocalAudioRepositoryImpl @Inject constructor(
             cachedTopics = null,
             summaryId = null,
             cachedRecommendations = null,
-            cacheTimestampMillis = null
+            cacheTimestampMillis = null,
+            attachmentUri = null
         )
     }
 

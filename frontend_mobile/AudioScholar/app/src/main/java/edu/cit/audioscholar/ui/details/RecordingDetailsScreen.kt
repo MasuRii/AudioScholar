@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,6 +45,8 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -198,7 +201,15 @@ fun RecordingDetailsScreen(
             )
         }
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+        val pullRefreshState = rememberPullToRefreshState()
+        
+        PullToRefreshBox(
+            state = pullRefreshState,
+            isRefreshing = uiState.isLoading && uiState.title.isNotEmpty(), // Only show pull indicator if we already have content to refresh
+            onRefresh = { viewModel.refreshDetails() },
+            modifier = Modifier.fillMaxSize().padding(paddingValues)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
 
             when {
                 uiState.isLoading && uiState.filePath.isEmpty() && uiState.remoteRecordingId == null -> {
@@ -383,6 +394,7 @@ fun RecordingDetailsScreen(
                     }
                 }
             }
+            } // End of Box content for PullToRefresh
         }
 
         if (uiState.showDeleteConfirmation) {
@@ -425,6 +437,16 @@ fun RecordingDetailsScreen(
                 onDismiss = viewModel::closeSummaryEditDialog,
                 onConfirm = { summary, keyPoints ->
                     viewModel.updateSummaryContent(summary, keyPoints, uiState.topics, uiState.glossaryItems)
+                }
+            )
+        }
+
+        if (uiState.showGlossaryEditDialog) {
+            GlossaryEditDialog(
+                initialGlossary = uiState.glossaryItems,
+                onDismiss = viewModel::closeGlossaryEditDialog,
+                onConfirm = { newGlossary ->
+                    viewModel.updateSummaryContent(uiState.summaryText, uiState.keyPoints, uiState.topics, newGlossary)
                 }
             )
         }
@@ -485,24 +507,19 @@ fun YouTubeRecommendationCard(
     var imageUrl by remember { mutableStateOf(video.thumbnailUrl) }
     var attemptFallback by remember { mutableStateOf(true) }
 
-    Box(modifier = Modifier
-        .width(180.dp)
-        .height(IntrinsicSize.Min)
+    Card(
+        modifier = Modifier
+            .width(220.dp)
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(onClick = onClick),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column {
+        Column {
+            Box(modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = video.title ?: "YouTube video thumbnail",
-                    modifier = Modifier
-                        .height(100.dp)
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.medium),
+                    modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     placeholder = painterResource(id = R.drawable.ic_youtubeplaceholder_quantum),
                     error = painterResource(id = R.drawable.ic_youtubeplaceholder_quantum),
@@ -518,36 +535,36 @@ fun YouTubeRecommendationCard(
                         }
                     }
                 )
-                Column(modifier = Modifier
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-                    verticalArrangement = Arrangement.Top
-                ) {
-                    Text(
-                        text = video.title ?: "No Title",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                if (video.recommendationId != null) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(24.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Dismiss",
+                            tint = Color.White,
+                            modifier = Modifier.padding(4.dp)
+                        )
+                    }
                 }
             }
-        }
-
-        if (video.recommendationId != null) {
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .size(24.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+            
+            Column(modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+                verticalArrangement = Arrangement.Top
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Dismiss",
-                    tint = Color.White,
-                    modifier = Modifier.padding(4.dp)
+                Text(
+                    text = video.title ?: "No Title",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -689,6 +706,129 @@ fun SummaryEditDialog(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlossaryEditDialog(
+    initialGlossary: List<GlossaryItemDto>,
+    onDismiss: () -> Unit,
+    onConfirm: (List<GlossaryItemDto>) -> Unit
+) {
+    val glossaryItems = remember { mutableStateListOf(*initialGlossary.toTypedArray()) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Edit Glossary") },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Filled.Close, contentDescription = "Cancel")
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = {
+                            // Filter out items with both empty term and definition
+                            val cleanedItems = glossaryItems.filter { 
+                                !it.term.isNullOrBlank() || !it.definition.isNullOrBlank() 
+                            }
+                            onConfirm(cleanedItems)
+                        }) {
+                            Text("Save", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (glossaryItems.isEmpty()) {
+                     Text(
+                        text = "No glossary terms added yet.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
+                glossaryItems.forEachIndexed { index, item ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Term ${index + 1}", 
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { glossaryItems.removeAt(index) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Delete,
+                                        contentDescription = "Delete term",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                            
+                            OutlinedTextField(
+                                value = item.term ?: "",
+                                onValueChange = { newValue ->
+                                    glossaryItems[index] = item.copy(term = newValue)
+                                },
+                                label = { Text("Term") },
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                singleLine = true
+                            )
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            OutlinedTextField(
+                                value = item.definition ?: "",
+                                onValueChange = { newValue ->
+                                    glossaryItems[index] = item.copy(definition = newValue)
+                                },
+                                label = { Text("Definition") },
+                                modifier = Modifier.fillMaxWidth(),
+                                minLines = 2
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = { glossaryItems.add(GlossaryItemDto(term = "", definition = "")) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add New Term")
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InsightsTabContent(
@@ -716,7 +856,13 @@ fun InsightsTabContent(
                 uiState.topics.forEach { topic ->
                     SuggestionChip(
                         onClick = { /* No action */ },
-                        label = { Text(topic) }
+                        label = { Text(topic) },
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        border = null
                     )
                 }
             }
@@ -978,29 +1124,56 @@ fun ResourcesTabContent(
         }
 
         // Glossary Section
-        if (uiState.glossaryItems.isNotEmpty()) {
-            Text(
-                text = "Glossary",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            uiState.glossaryItems.forEach { item ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = item.term ?: "Unknown Term",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
+        if (uiState.glossaryItems.isNotEmpty() || uiState.summaryStatus == SummaryStatus.READY) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Glossary",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                if (uiState.summaryStatus == SummaryStatus.READY && !uiState.isProcessing) {
+                    IconButton(onClick = viewModel::openGlossaryEditDialog) {
+                        Icon(
+                            imageVector = Icons.Filled.Edit,
+                            contentDescription = "Edit Glossary",
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = item.definition ?: "No definition available.",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (uiState.glossaryItems.isEmpty()) {
+                Text(
+                    text = "No glossary terms available.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LocalContentColor.current.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                uiState.glossaryItems.forEach { item ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = item.term ?: "Unknown Term",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = item.definition ?: "No definition available.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             }
@@ -1011,89 +1184,112 @@ fun ResourcesTabContent(
 
         // PowerPoint/PDF Section
         Text(
-            text = if (uiState.isCloudSource) 
-                   stringResource(R.string.details_powerpoint_pdf_title) 
+            text = if (uiState.isCloudSource)
+                   stringResource(R.string.details_powerpoint_pdf_title)
                    else stringResource(R.string.details_powerpoint_title),
             style = MaterialTheme.typography.titleMedium
         )
         Spacer(modifier = Modifier.height(8.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
+            val context = LocalContext.current
             if (uiState.isCloudSource) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    if (uiState.generatedPdfUrl.isNullOrBlank()) {
+                if (!uiState.generatedPdfUrl.isNullOrBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { uiState.generatedPdfUrl.let { openUrl(context, it) } }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PictureAsPdf,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = uiState.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Open",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    Box(modifier = Modifier.padding(16.dp)) {
                         Text(
                             text = stringResource(R.string.details_pdf_not_available),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = LocalContentColor.current.copy(alpha = 0.7f),
-                            modifier = Modifier.weight(1f)
+                            color = LocalContentColor.current.copy(alpha = 0.7f)
                         )
-                    } else {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.details_pdf_available),
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Button(
-                            onClick = {
-                                uiState.generatedPdfUrl.let { pdfUrl ->
-                                    viewModel.onOpenUrl(pdfUrl)
-                                }
-                            }
-                        ) {
-                            Icon(Icons.Filled.PictureAsPdf, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                            Text(stringResource(R.string.details_view_pdf_button))
-                        }
                     }
                 }
             } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    val currentAttachment = uiState.attachedPowerPoint
-                    Column(Modifier.weight(1f)) {
+                val currentAttachment = uiState.attachedPowerPoint
+                if (currentAttachment != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { openUrl(context, currentAttachment) }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Slideshow,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
                         Text(
-                            text = currentAttachment ?: stringResource(R.string.details_powerpoint_none_attached),
+                            text = "Presentation Slides",
                             style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = if (currentAttachment == null) LocalContentColor.current.copy(alpha = 0.7f) else LocalContentColor.current
+                            modifier = Modifier.weight(1f)
                         )
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    val buttonsEnabled = !uiState.isProcessing && !uiState.isDeleting && !uiState.isCloudSource
-                    Button(
-                        onClick = {
-                            if (currentAttachment == null) {
-                                viewModel.requestAttachPowerPoint()
-                            } else {
-                                viewModel.detachPowerPoint()
+                        if (uiState.remoteRecordingId == null && !uiState.isProcessing && !uiState.isDeleting) {
+                            IconButton(onClick = viewModel::detachPowerPoint) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = stringResource(R.string.details_powerpoint_detach_button),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                        },
-                        enabled = buttonsEnabled
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val icon = if (currentAttachment == null) Icons.Filled.AttachFile else Icons.Filled.LinkOff
-                        val textRes = if (currentAttachment == null) R.string.details_powerpoint_attach_button else R.string.details_powerpoint_detach_button
-                        Icon(icon, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text(stringResource(textRes))
+                        Text(
+                            text = stringResource(R.string.details_powerpoint_none_attached),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = LocalContentColor.current.copy(alpha = 0.7f)
+                        )
+                        if (uiState.remoteRecordingId == null && !uiState.isProcessing && !uiState.isDeleting) {
+                            Button(onClick = viewModel::requestAttachPowerPoint) {
+                                Icon(Icons.Filled.AttachFile, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                Text(stringResource(R.string.details_powerpoint_attach_button))
+                            }
+                        }
                     }
                 }
             }

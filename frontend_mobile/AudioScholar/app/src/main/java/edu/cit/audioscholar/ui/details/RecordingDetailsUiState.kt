@@ -44,6 +44,7 @@ data class RecordingDetailsUiState(
     val topics: List<String> = emptyList(),
     val glossaryItems: List<GlossaryItemDto> = emptyList(),
     val showSummaryEditDialog: Boolean = false,
+    val showGlossaryEditDialog: Boolean = false,
 
     val recommendationsStatus: RecommendationsStatus = RecommendationsStatus.IDLE,
     val youtubeRecommendations: List<RecommendationDto> = emptyList(),

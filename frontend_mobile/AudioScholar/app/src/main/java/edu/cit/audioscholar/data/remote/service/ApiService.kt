@@ -83,7 +83,7 @@ interface ApiService {
         @Path("recordingId") recordingId: String
     ): Response<List<RecommendationDto>>
 
-    @GET("/api/recordings/{recordingId}")
+    @GET("/api/audio/recordings/{recordingId}")
     suspend fun getRecordingDetails(
         @Path("recordingId") recordingId: String
     ): Response<AudioMetadataDto>

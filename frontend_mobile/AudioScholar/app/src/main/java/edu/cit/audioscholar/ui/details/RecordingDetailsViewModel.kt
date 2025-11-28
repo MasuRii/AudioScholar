@@ -63,7 +63,6 @@ class RecordingDetailsViewModel @Inject constructor(
     private val localAudioRepository: LocalAudioRepository,
     private val playbackManager: PlaybackManager,
     private val remoteAudioRepository: RemoteAudioRepository,
-    private val cloudCacheRepository: CloudCacheRepository,
     private val gson: Gson,
     private val application: Application,
     private val processingEventBus: ProcessingEventBus
@@ -187,6 +186,7 @@ class RecordingDetailsViewModel @Inject constructor(
                                 topics = if (isSummaryCacheValid) metadata.cachedTopics ?: emptyList() else emptyList(),
                                 glossaryItems = if (isSummaryCacheValid) cachedGlossary ?: emptyList() else emptyList(),
                                 youtubeRecommendations = if (areRecommendationsCacheValid) cachedRecs ?: emptyList() else emptyList(),
+                                attachedPowerPoint = metadata.attachmentUri,
                                 isCloudSource = false
                             )
                         }
@@ -239,38 +239,10 @@ class RecordingDetailsViewModel @Inject constructor(
                 return@launch
             }
 
-            var needsSummaryFetch = true
-            var needsRecsFetch = true
-            var initialSummaryStatus = SummaryStatus.PROCESSING
-            var initialRecsStatus = RecommendationsStatus.LOADING
-            var cachedSummaryText: String? = null
-            var cachedGlossary: List<GlossaryItemDto>? = null
-            var cachedRecs: List<RecommendationDto>? = null
+            val initialSummaryStatus = SummaryStatus.PROCESSING
+            val initialRecsStatus = RecommendationsStatus.LOADING
 
-            val idForCacheCheck = recordingId?.takeIf { it.isNotBlank() } ?: primaryId
-            Log.d("DetailsViewModel", "Using ID for cache check: $idForCacheCheck")
-
-            cloudCacheRepository.getCache(idForCacheCheck)?.let { cloudCache ->
-                Log.d("DetailsViewModel", "Found dedicated cloud cache entry for $idForCacheCheck.")
-                val cacheTimestamp = cloudCache.cacheTimestampMillis
-                val isSummaryCacheValid = isCacheValid(cacheTimestamp) && !cloudCache.summaryText.isNullOrBlank()
-                val areRecsCacheValid = isCacheValid(cacheTimestamp) && !cloudCache.recommendationsJson.isNullOrBlank()
-                Log.d("DetailsViewModel", "[CloudCache] Check for $idForCacheCheck: SummaryValid=$isSummaryCacheValid, RecsValid=$areRecsCacheValid")
-
-                if (isSummaryCacheValid) {
-                    needsSummaryFetch = false
-                    initialSummaryStatus = SummaryStatus.READY
-                    cachedSummaryText = cloudCache.summaryText
-                    cachedGlossary = parseGlossary(cloudCache.glossaryJson)
-                }
-                if (areRecsCacheValid) {
-                    needsRecsFetch = false
-                    initialRecsStatus = RecommendationsStatus.READY
-                    cachedRecs = parseRecommendations(cloudCache.recommendationsJson)
-                }
-            } ?: Log.d("DetailsViewModel", "No dedicated cloud cache entry found for $idForCacheCheck.")
-
-            Log.i("DetailsViewModel", "[Cloud Load] Setting initial state. Summary Status: $initialSummaryStatus, Recs Status: $initialRecsStatus, Has Summary Text: ${!cachedSummaryText.isNullOrBlank()}")
+            Log.i("DetailsViewModel", "[Cloud Load] Setting initial state. Summary Status: $initialSummaryStatus, Recs Status: $initialRecsStatus")
 
             _uiState.update {
                 it.copy(
@@ -290,9 +262,10 @@ class RecordingDetailsViewModel @Inject constructor(
                     error = null,
                     summaryStatus = initialSummaryStatus,
                     recommendationsStatus = initialRecsStatus,
-                    summaryText = cachedSummaryText ?: "",
-                    glossaryItems = cachedGlossary ?: emptyList(),
-                    youtubeRecommendations = cachedRecs ?: emptyList(),
+                    summaryText = "",
+                    keyPoints = emptyList(),
+                    glossaryItems = emptyList(),
+                    youtubeRecommendations = emptyList(),
                     isCloudSource = true
                 )
             }
@@ -303,18 +276,8 @@ class RecordingDetailsViewModel @Inject constructor(
             val idToUseForFetch = recordingId?.takeIf { it.isNotBlank() } ?: primaryId
             if (idToUseForFetch.isNotBlank()) {
                 launch { fetchCloudDetails(idToUseForFetch) }
-
-                if (needsSummaryFetch || needsRecsFetch) {
-                    Log.d("DetailsViewModel", "[Cloud Load] Cache invalid/missing for $idToUseForFetch. Triggering direct fetches.")
-                     if (needsSummaryFetch) {
-                         launch { fetchSummary(idToUseForFetch) }
-                     }
-                     if (needsRecsFetch) {
-                         launch { fetchRecommendations(idToUseForFetch) }
-                     }
-                } else {
-                    Log.d("DetailsViewModel", "[Cloud Load] Cache is valid for $idToUseForFetch or fetch ID missing. No fetch needed.")
-                }
+                launch { fetchSummary(idToUseForFetch) }
+                launch { fetchRecommendations(idToUseForFetch) }
             }
         }
     }
@@ -495,18 +458,13 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                 }
             } ?: Log.w("DetailsViewModel", "[Cache] Summary fetched for local source, but currentMetadata is null!")
-        } else {
-            Log.d("DetailsViewModel", "[Cache] Saving fetched summary data to cloud cache for Recording ID: $remoteId")
-            viewModelScope.launch(Dispatchers.IO) {
-                cloudCacheRepository.saveSummaryToCache(remoteId, summaryDto, cacheTimestamp)
-            }
         }
     }
 
     private fun cacheRecommendations(remoteId: String, recommendationsList: List<RecommendationDto>) {
-         val cacheTimestamp = System.currentTimeMillis()
-         val currentState = uiState.value
-         if (!currentState.isCloudSource) {
+        val cacheTimestamp = System.currentTimeMillis()
+        val currentState = uiState.value
+        if (!currentState.isCloudSource) {
             currentMetadata?.let { localMeta ->
                 val finalTimestamp = if(currentState.summaryStatus == SummaryStatus.READY && localMeta.cacheTimestampMillis != null && localMeta.cacheTimestampMillis > cacheTimestamp - 5000) localMeta.cacheTimestampMillis else cacheTimestamp
                 val updatedMeta = localMeta.copy(
@@ -524,11 +482,6 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                 }
             } ?: Log.w("DetailsViewModel", "[Cache] Recommendations fetched for local source, but currentMetadata is null!")
-        } else {
-            Log.d("DetailsViewModel", "[Cache] Saving fetched recommendations data to cloud cache for Recording ID: $remoteId")
-            viewModelScope.launch(Dispatchers.IO) {
-                cloudCacheRepository.saveRecommendationsToCache(remoteId, recommendationsList, cacheTimestamp)
-            }
         }
     }
 
@@ -829,9 +782,23 @@ class RecordingDetailsViewModel @Inject constructor(
         if (uri != null) {
             val filename = getFileNameFromUri(uri)
             Log.d("DetailsViewModel", "Setting attached PowerPoint: $uri")
-            val infoMsg = "PowerPoint attached: $filename"
-            _uiState.update { it.copy(attachedPowerPoint = uri.toString(), infoMessage = infoMsg) }
-            viewModelScope.launch { _infoMessageEvent.trySend(infoMsg) }
+            
+            viewModelScope.launch {
+                val state = uiState.value
+                if (!state.isCloudSource && state.filePath.isNotEmpty()) {
+                    val success = localAudioRepository.updateAttachmentUri(state.filePath, uri.toString())
+                    if (success) {
+                        Log.d("DetailsViewModel", "Persisted attachment URI to local metadata.")
+                        currentMetadata = currentMetadata?.copy(attachmentUri = uri.toString())
+                    } else {
+                        Log.e("DetailsViewModel", "Failed to persist attachment URI.")
+                    }
+                }
+                
+                val infoMsg = "PowerPoint attached: $filename"
+                _uiState.update { it.copy(attachedPowerPoint = uri.toString(), infoMessage = infoMsg) }
+                _infoMessageEvent.trySend(infoMsg)
+            }
         } else {
             val infoMsg = "PowerPoint selection cancelled."
             _uiState.update { it.copy(infoMessage = infoMsg) }
@@ -859,9 +826,38 @@ class RecordingDetailsViewModel @Inject constructor(
 
     fun detachPowerPoint() {
         Log.d("DetailsViewModel", "Detach PowerPoint clicked.")
-        val infoMsg = "PowerPoint detached."
-        _uiState.update { it.copy(attachedPowerPoint = null, infoMessage = infoMsg) }
-        viewModelScope.launch { _infoMessageEvent.trySend(infoMsg) }
+        viewModelScope.launch {
+            val state = uiState.value
+            if (!state.isCloudSource && state.filePath.isNotEmpty()) {
+                val success = localAudioRepository.updateAttachmentUri(state.filePath, null)
+                if (success) {
+                    currentMetadata = currentMetadata?.copy(attachmentUri = null)
+                }
+            }
+            val infoMsg = "PowerPoint detached."
+            _uiState.update { it.copy(attachedPowerPoint = null, infoMessage = infoMsg) }
+            _infoMessageEvent.trySend(infoMsg)
+        }
+    }
+
+    fun refreshDetails() {
+        val state = uiState.value
+        if (state.isCloudSource) {
+            val idToFetch = state.remoteRecordingId ?: state.cloudId
+            if (idToFetch != null) {
+                Log.d("DetailsViewModel", "Refreshing cloud details for $idToFetch")
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isLoading = true) }
+                    fetchCloudDetails(idToFetch)
+                    fetchSummary(idToFetch)
+                    fetchRecommendations(idToFetch)
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+        } else {
+            Log.d("DetailsViewModel", "Refetching local details for ${state.filePath}")
+            loadLocalRecordingDetailsAndListen(state.filePath)
+        }
     }
 
     fun onWatchYouTubeVideo(video: RecommendationDto) {
@@ -1011,6 +1007,14 @@ class RecordingDetailsViewModel @Inject constructor(
         _uiState.update { it.copy(showSummaryEditDialog = false) }
     }
 
+    fun openGlossaryEditDialog() {
+        _uiState.update { it.copy(showGlossaryEditDialog = true) }
+    }
+
+    fun closeGlossaryEditDialog() {
+        _uiState.update { it.copy(showGlossaryEditDialog = false) }
+    }
+
     fun updateSummaryContent(
         content: String,
         keyPoints: List<String>,
@@ -1027,7 +1031,7 @@ class RecordingDetailsViewModel @Inject constructor(
             return
         }
 
-        _uiState.update { it.copy(isUpdatingDetails = true, showSummaryEditDialog = false) }
+        _uiState.update { it.copy(isUpdatingDetails = true, showSummaryEditDialog = false, showGlossaryEditDialog = false) }
 
         viewModelScope.launch {
             remoteAudioRepository.updateSummary(summaryId, content, keyPoints, topics, glossary)
@@ -1048,7 +1052,12 @@ class RecordingDetailsViewModel @Inject constructor(
                         cacheSummary(state.remoteRecordingId ?: "", updatedDto)
                     }.onFailure { e ->
                         val errorMsg = mapErrorToUserFriendlyMessage(e)
-                        _uiState.update { it.copy(isUpdatingDetails = false, error = errorMsg) }
+                        _uiState.update { it.copy(
+                            isUpdatingDetails = false,
+                            error = errorMsg,
+                            title = state.title,
+                            description = state.description
+                        ) }
                         viewModelScope.launch { _errorEvent.trySend(errorMsg) }
                     }
                 }
@@ -1067,7 +1076,12 @@ class RecordingDetailsViewModel @Inject constructor(
             return
         }
 
-        _uiState.update { it.copy(isUpdatingDetails = true, showEditDialog = false) }
+        _uiState.update { it.copy(
+            isUpdatingDetails = true,
+            showEditDialog = false,
+            title = titleToSave,
+            description = descToSave
+        ) }
 
         viewModelScope.launch {
             try {
@@ -1085,6 +1099,10 @@ class RecordingDetailsViewModel @Inject constructor(
                                             infoMessage = "Details updated successfully"
                                         )
                                     }
+                                    
+                                    // Local metadata update is intentionally skipped here to decouple sync.
+                                    // Local files are only updated on explicit user action or local edit.
+
                                     viewModelScope.launch { _infoMessageEvent.trySend("Details updated successfully") }
                                     viewModelScope.launch { _recordingUpdatedEvent.trySend(Unit) }
                                 }.onFailure { e ->
@@ -1159,6 +1177,17 @@ class RecordingDetailsViewModel @Inject constructor(
         }
     }
 
+    private fun parseKeyPoints(json: String?): List<String>? {
+        if (json.isNullOrBlank()) return null
+        return try {
+            val type = object : TypeToken<List<String>>() {}.type
+            gson.fromJson(json, type)
+        } catch (e: Exception) {
+            Log.e("DetailsViewModel", "Failed to parse KeyPoints JSON from cache", e)
+            null
+        }
+    }
+
     fun dismissRecommendation(recommendationId: String) {
         val currentList = uiState.value.youtubeRecommendations
         // Check if item exists before proceeding
@@ -1187,11 +1216,6 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                     result.onSuccess {
                         Log.d("DetailsViewModel", "Recommendation dismissed successfully on server: $recommendationId")
-                        // Update cache to reflect removal
-                        val remoteId = uiState.value.remoteRecordingId ?: uiState.value.cloudId
-                        if (remoteId != null) {
-                            cacheRecommendations(remoteId, _uiState.value.youtubeRecommendations)
-                        }
                     }
                 }
         }

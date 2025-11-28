@@ -26,5 +26,6 @@ data class RecordingMetadata(
     val cachedTopics: List<String>? = null,
     val summaryId: String? = null,
     val cachedRecommendations: List<RecommendationDto>?,
-    val cacheTimestampMillis: Long?
+    val cacheTimestampMillis: Long?,
+    val attachmentUri: String? = null
 )
