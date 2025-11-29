@@ -41,4 +41,12 @@ interface RemoteAudioRepository {
 
     fun deleteCloudRecording(metadataId: String): Flow<Result<Unit>>
 
+    fun createNote(recordingId: String, content: String, tags: List<String>?): Flow<Result<UserNoteDto>>
+
+    fun getNotes(recordingId: String): Flow<Result<List<UserNoteDto>>>
+
+    fun updateNote(noteId: String, content: String?, tags: List<String>?): Flow<Result<UserNoteDto>>
+
+    fun deleteNote(noteId: String): Flow<Result<Unit>>
+
 }

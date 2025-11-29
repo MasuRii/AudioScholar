@@ -415,7 +415,11 @@ public class FirebaseService {
 			List<Map<String, Object>> results = new ArrayList<>();
 			List<QueryDocumentSnapshot> documents = future.get().getDocuments();
 			for (QueryDocumentSnapshot document : documents) {
-				results.add(document.getData());
+				Map<String, Object> data = document.getData();
+				if (!data.containsKey("id")) {
+					data.put("id", document.getId());
+				}
+				results.add(data);
 			}
 			log.info("Query on collection '{}' where '{}' == '{}' returned {} results.", collection, field, value,
 					results.size());

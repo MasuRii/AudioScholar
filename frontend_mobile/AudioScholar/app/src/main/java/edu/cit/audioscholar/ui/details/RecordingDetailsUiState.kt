@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.ui.text.input.TextFieldValue
 import edu.cit.audioscholar.data.remote.dto.GlossaryItemDto
 import edu.cit.audioscholar.data.remote.dto.RecommendationDto
+import edu.cit.audioscholar.data.remote.dto.UserNoteDto
 
 enum class SummaryStatus { IDLE, PROCESSING, READY, FAILED }
 enum class RecommendationsStatus { IDLE, LOADING, READY, FAILED }
@@ -49,6 +50,10 @@ data class RecordingDetailsUiState(
     val recommendationsStatus: RecommendationsStatus = RecommendationsStatus.IDLE,
     val youtubeRecommendations: List<RecommendationDto> = emptyList(),
 
+    val userNotes: List<UserNoteDto> = emptyList(),
+    val isLoadingNotes: Boolean = false,
+    val noteError: String? = null,
+
     val attachedPowerPoint: String? = null,
 
     val showDeleteConfirmation: Boolean = false,
@@ -57,7 +62,9 @@ data class RecordingDetailsUiState(
 
     val textToCopy: String? = null,
 
-    val uploadProgressPercent: Int? = null
+    val uploadProgressPercent: Int? = null,
+
+    val currentUserId: String? = null
 ) {
     val isProcessing: Boolean
         get() = uploadProgressPercent != null ||

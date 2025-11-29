@@ -13,6 +13,7 @@ import edu.cit.audioscholar.data.local.model.RecordingMetadata
 import edu.cit.audioscholar.data.remote.dto.GlossaryItemDto
 import edu.cit.audioscholar.data.remote.dto.RecommendationDto
 import edu.cit.audioscholar.data.remote.dto.SummaryResponseDto
+import edu.cit.audioscholar.data.remote.dto.UserNoteDto
 import edu.cit.audioscholar.domain.repository.*
 import edu.cit.audioscholar.service.PlaybackManager
 import edu.cit.audioscholar.service.PlaybackState
@@ -65,7 +66,8 @@ class RecordingDetailsViewModel @Inject constructor(
     private val remoteAudioRepository: RemoteAudioRepository,
     private val gson: Gson,
     private val application: Application,
-    private val processingEventBus: ProcessingEventBus
+    private val processingEventBus: ProcessingEventBus,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RecordingDetailsUiState())
@@ -99,6 +101,8 @@ class RecordingDetailsViewModel @Inject constructor(
     init {
         Log.d("DetailsViewModel", "Initializing. LocalPath: $localFilePath, PrimaryCloudID: $cloudId, OtherCloudID: $cloudRecordingId")
 
+        observeCurrentUser()
+
         when {
             localFilePath != null -> {
                 Log.d("DetailsViewModel", "Source: Local File")
@@ -116,6 +120,18 @@ class RecordingDetailsViewModel @Inject constructor(
                 Log.e("DetailsViewModel", "Initialization error: No local path or cloud ID found in arguments.")
                 _uiState.update { it.copy(isLoading = false, error = application.getString(R.string.error_unexpected_details_view)) }
                 viewModelScope.launch { _errorEvent.trySend(application.getString(R.string.error_unexpected_details_view)) }
+            }
+        }
+    }
+
+    private fun observeCurrentUser() {
+        viewModelScope.launch {
+            authRepository.getUserProfile().collect { result ->
+                if (result is edu.cit.audioscholar.util.Resource.Success && result.data != null) {
+                    val profile = result.data
+                    _uiState.update { it.copy(currentUserId = profile.userId) }
+                    Log.d("DetailsViewModel", "Current user loaded: ${profile.userId}")
+                }
             }
         }
     }
@@ -192,20 +208,27 @@ class RecordingDetailsViewModel @Inject constructor(
                         }
                         configurePlayback(localMetadata = metadata)
 
-                        if (remoteId != null && (!isSummaryCacheValid || !areRecommendationsCacheValid)) {
-                            Log.d("DetailsViewModel", "[Local Load] Remote ID exists and cache is invalid/incomplete. Starting listener and attempting immediate fetch.")
-                            listenForProcessingCompletion(remoteId, !isSummaryCacheValid, !areRecommendationsCacheValid)
+                        if (remoteId != null) {
+                            // Always fetch notes if we have a remote ID
+                            launch { loadUserNotes(remoteId) }
 
-                            if (!isSummaryCacheValid) {
-                                Log.d("DetailsViewModel", "[Local Load] Summary cache invalid, launching immediate fetch for $remoteId")
-                                launch { fetchSummary(remoteId) }
-                            }
-                            if (!areRecommendationsCacheValid) {
-                                Log.d("DetailsViewModel", "[Local Load] Recommendations cache invalid, launching immediate fetch for $remoteId")
-                                launch { fetchRecommendations(remoteId) }
+                            if (!isSummaryCacheValid || !areRecommendationsCacheValid) {
+                                Log.d("DetailsViewModel", "[Local Load] Remote ID exists and cache is invalid/incomplete. Starting listener and attempting immediate fetch.")
+                                listenForProcessingCompletion(remoteId, !isSummaryCacheValid, !areRecommendationsCacheValid)
+
+                                if (!isSummaryCacheValid) {
+                                    Log.d("DetailsViewModel", "[Local Load] Summary cache invalid, launching immediate fetch for $remoteId")
+                                    launch { fetchSummary(remoteId) }
+                                }
+                                if (!areRecommendationsCacheValid) {
+                                    Log.d("DetailsViewModel", "[Local Load] Recommendations cache invalid, launching immediate fetch for $remoteId")
+                                    launch { fetchRecommendations(remoteId) }
+                                }
+                            } else {
+                                Log.d("DetailsViewModel", "Local record. Cache is valid. No summary/rec fetch needed.")
                             }
                         } else {
-                            Log.d("DetailsViewModel", "Local record. Cache is valid or no remote ID. No direct fetch/listener needed now.")
+                            Log.d("DetailsViewModel", "Local record. No remote ID.")
                         }
 
                     }.onFailure { e ->
@@ -278,6 +301,7 @@ class RecordingDetailsViewModel @Inject constructor(
                 launch { fetchCloudDetails(idToUseForFetch) }
                 launch { fetchSummary(idToUseForFetch) }
                 launch { fetchRecommendations(idToUseForFetch) }
+                launch { loadUserNotes(idToUseForFetch) }
             }
         }
     }
@@ -391,7 +415,7 @@ class RecordingDetailsViewModel @Inject constructor(
                 )
             }
                     Log.d("DetailsViewModel", "[DirectFetch SUCCESS] UI State updated. New status: ${updatedState.summaryStatus}")
-                    cacheSummary(remoteId, summaryDto)
+                    cacheSummary(summaryDto)
                 }.onFailure { e ->
                      Log.e("DetailsViewModel", "[DirectFetch FAILURE] Summary fetch inner fail for $remoteId", e)
                     throw e
@@ -420,7 +444,7 @@ class RecordingDetailsViewModel @Inject constructor(
                          )
                     }
                     Log.d("DetailsViewModel", "[DirectFetch SUCCESS] UI State updated. New status: ${updatedState.recommendationsStatus}")
-                    cacheRecommendations(remoteId, recommendationsList)
+                    cacheRecommendations(recommendationsList)
                  }.onFailure { e ->
                     Log.e("DetailsViewModel", "[DirectFetch FAILURE] Recommendations fetch inner fail for $remoteId", e)
                     throw e
@@ -434,7 +458,7 @@ class RecordingDetailsViewModel @Inject constructor(
         }
     }
 
-    private fun cacheSummary(remoteId: String, summaryDto: SummaryResponseDto) {
+    private fun cacheSummary(summaryDto: SummaryResponseDto) {
         val cacheTimestamp = System.currentTimeMillis()
         val currentState = uiState.value
         if (!currentState.isCloudSource) {
@@ -461,7 +485,7 @@ class RecordingDetailsViewModel @Inject constructor(
         }
     }
 
-    private fun cacheRecommendations(remoteId: String, recommendationsList: List<RecommendationDto>) {
+    private fun cacheRecommendations(recommendationsList: List<RecommendationDto>) {
         val cacheTimestamp = System.currentTimeMillis()
         val currentState = uiState.value
         if (!currentState.isCloudSource) {
@@ -851,6 +875,7 @@ class RecordingDetailsViewModel @Inject constructor(
                     fetchCloudDetails(idToFetch)
                     fetchSummary(idToFetch)
                     fetchRecommendations(idToFetch)
+                    loadUserNotes(idToFetch)
                     _uiState.update { it.copy(isLoading = false) }
                 }
             }
@@ -1049,7 +1074,7 @@ class RecordingDetailsViewModel @Inject constructor(
                         }
                         viewModelScope.launch { _infoMessageEvent.trySend("Summary updated successfully") }
                         // Also update cache if needed
-                        cacheSummary(state.remoteRecordingId ?: "", updatedDto)
+                        cacheSummary(updatedDto)
                     }.onFailure { e ->
                         val errorMsg = mapErrorToUserFriendlyMessage(e)
                         _uiState.update { it.copy(
@@ -1216,6 +1241,118 @@ class RecordingDetailsViewModel @Inject constructor(
                     }
                     result.onSuccess {
                         Log.d("DetailsViewModel", "Recommendation dismissed successfully on server: $recommendationId")
+                    }
+                }
+        }
+    }
+
+    fun loadUserNotes(recordingId: String) {
+        if (recordingId.isBlank()) return
+
+        _uiState.update { it.copy(isLoadingNotes = true, noteError = null) }
+
+        viewModelScope.launch {
+            remoteAudioRepository.getNotes(recordingId)
+                .collect { result ->
+                    result.onSuccess { notes ->
+                        _uiState.update {
+                            it.copy(
+                                userNotes = notes,
+                                isLoadingNotes = false
+                            )
+                        }
+                    }.onFailure { e ->
+                        val errorMsg = mapErrorToUserFriendlyMessage(e, "Failed to load notes.")
+                        _uiState.update {
+                            it.copy(
+                                isLoadingNotes = false,
+                                noteError = errorMsg
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    fun createUserNote(content: String, tags: List<String>?) {
+        val state = _uiState.value
+        val recordingId = state.remoteRecordingId ?: state.cloudId
+
+        if (recordingId.isNullOrBlank()) {
+            _uiState.update { it.copy(noteError = "Cannot create note: Invalid recording ID") }
+            return
+        }
+
+        _uiState.update { it.copy(isLoadingNotes = true, noteError = null) }
+
+        viewModelScope.launch {
+            remoteAudioRepository.createNote(recordingId, content, tags)
+                .collect { result ->
+                    result.onSuccess {
+                        loadUserNotes(recordingId)
+                        _infoMessageEvent.trySend("Note added")
+                    }.onFailure { e ->
+                        val errorMsg = mapErrorToUserFriendlyMessage(e, "Failed to create note.")
+                        _uiState.update {
+                            it.copy(
+                                isLoadingNotes = false,
+                                noteError = errorMsg
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    fun updateUserNote(noteId: String, content: String?, tags: List<String>?) {
+        _uiState.update { it.copy(isLoadingNotes = true, noteError = null) }
+
+        viewModelScope.launch {
+            remoteAudioRepository.updateNote(noteId, content, tags)
+                .collect { result ->
+                    result.onSuccess {
+                        val recordingId = _uiState.value.remoteRecordingId ?: _uiState.value.cloudId
+                        if (recordingId != null) {
+                            loadUserNotes(recordingId)
+                        } else {
+                            _uiState.update { it.copy(isLoadingNotes = false) }
+                        }
+                        _infoMessageEvent.trySend("Note updated")
+                    }.onFailure { e ->
+                        val errorMsg = mapErrorToUserFriendlyMessage(e, "Failed to update note.")
+                        _uiState.update {
+                            it.copy(
+                                isLoadingNotes = false,
+                                noteError = errorMsg
+                            )
+                        }
+                    }
+                }
+        }
+    }
+
+    fun deleteUserNote(noteId: String) {
+        _uiState.update { it.copy(isLoadingNotes = true, noteError = null) }
+
+        viewModelScope.launch {
+            remoteAudioRepository.deleteNote(noteId)
+                .collect { result ->
+                    result.onSuccess {
+                        val recordingId = _uiState.value.remoteRecordingId ?: _uiState.value.cloudId
+                        if (recordingId != null) {
+                            loadUserNotes(recordingId)
+                        } else {
+                            _uiState.update { it.copy(isLoadingNotes = false) }
+                        }
+                        _infoMessageEvent.trySend("Note deleted")
+                    }.onFailure { e ->
+                        val errorMsg = mapErrorToUserFriendlyMessage(e, "Failed to delete note.")
+                        _uiState.update {
+                            it.copy(
+                                isLoadingNotes = false,
+                                noteError = errorMsg
+                            )
+                        }
                     }
                 }
         }

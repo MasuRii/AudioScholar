@@ -82,8 +82,13 @@ public class UserNoteService {
 		List<Map<String, Object>> results = firebaseService.queryCollection(USER_NOTES_COLLECTION, "recordingId",
 				recordingId);
 
-		return results.stream().map(data -> UserNote.fromMap((String) data.get("noteId"), data))
-				.filter(note -> note != null && userId.equals(note.getUserId())).collect(Collectors.toList());
+		return results.stream().map(data -> {
+			String id = (String) data.get("noteId");
+			if (id == null) {
+				id = (String) data.get("id");
+			}
+			return UserNote.fromMap(id, data);
+		}).filter(note -> note != null && userId.equals(note.getUserId())).collect(Collectors.toList());
 	}
 
 	public UserNote getNoteById(String userId, String noteId) {

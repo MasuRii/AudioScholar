@@ -55,6 +55,7 @@ import dev.jeziellago.compose.markdowntext.MarkdownText
 import edu.cit.audioscholar.R
 import edu.cit.audioscholar.data.remote.dto.GlossaryItemDto
 import edu.cit.audioscholar.data.remote.dto.RecommendationDto
+import edu.cit.audioscholar.data.remote.dto.UserNoteDto
 import edu.cit.audioscholar.ui.theme.AudioScholarTheme
 import edu.cit.audioscholar.util.Resource
 import kotlinx.coroutines.flow.collectLatest
@@ -233,7 +234,7 @@ fun RecordingDetailsScreen(
 
                 else -> {
                     var selectedTabIndex by remember { mutableIntStateOf(0) }
-                    val tabs = listOf("Insights", "Resources")
+                    val tabs = listOf("Insights", "Resources", "My Notes")
 
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Persistent Header Section
@@ -349,6 +350,15 @@ fun RecordingDetailsScreen(
                             when (selectedTabIndex) {
                                 0 -> InsightsTabContent(uiState, viewModel)
                                 1 -> ResourcesTabContent(uiState, viewModel)
+                                2 -> UserNotesTabContent(
+                                    userNotes = uiState.userNotes,
+                                    currentUserId = uiState.currentUserId,
+                                    isLoading = uiState.isLoadingNotes,
+                                    error = uiState.noteError,
+                                    onCreateNote = { content -> viewModel.createUserNote(content, null) },
+                                    onUpdateNote = { id, content -> viewModel.updateUserNote(id, content, null) },
+                                    onDeleteNote = { id -> viewModel.deleteUserNote(id) }
+                                )
                             }
                         }
                     }

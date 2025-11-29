@@ -116,4 +116,25 @@ interface ApiService {
         @Body roleRequest: UpdateRoleRequest
     ): Response<Unit>
 
+    @POST("/api/notes")
+    suspend fun createNote(
+        @Body request: CreateUserNoteRequest
+    ): Response<UserNoteDto>
+
+    @GET("/api/notes")
+    suspend fun getNotes(
+        @Query("recordingId") recordingId: String
+    ): Response<List<UserNoteDto>>
+
+    @PATCH("/api/notes/{id}")
+    suspend fun updateNote(
+        @Path("id") noteId: String,
+        @Body request: UpdateUserNoteRequest
+    ): Response<UserNoteDto>
+
+    @DELETE("/api/notes/{id}")
+    suspend fun deleteNote(
+        @Path("id") noteId: String
+    ): Response<Unit>
+
 }
