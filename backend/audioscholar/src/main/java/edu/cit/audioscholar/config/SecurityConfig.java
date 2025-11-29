@@ -1,7 +1,9 @@
 package edu.cit.audioscholar.config;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.crypto.SecretKey;
 
@@ -15,10 +17,12 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
@@ -57,6 +61,30 @@ public class SecurityConfig {
 	@Bean
 	PasswordEncoder passwordEncoder() {
 		return new BCryptPasswordEncoder();
+	}
+
+	@Bean
+	JwtAuthenticationConverter jwtAuthenticationConverter() {
+		JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
+		jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(jwt -> {
+			// Try retrieving as a List (standard for JSON arrays in JWT)
+			List<String> rolesList = jwt.getClaimAsStringList("roles");
+			if (rolesList != null) {
+				return rolesList.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList());
+			}
+
+			// Fallback: Try retrieving as a comma-separated String
+			String roles = jwt.getClaimAsString("roles");
+			if (roles == null || roles.isEmpty()) {
+				return Collections.emptyList();
+			}
+			return Arrays.stream(roles.split(",")).map(role -> {
+				// Ensure role starts with ROLE_ if convention dictates, but usually JWT already
+				// has it
+				return new SimpleGrantedAuthority(role.trim());
+			}).collect(Collectors.toList());
+		});
+		return jwtAuthenticationConverter;
 	}
 
 	@Bean
@@ -105,7 +133,8 @@ public class SecurityConfig {
 								"/api/auth/verify-google-token", "/api/auth/verify-github-code")
 						.permitAll().requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
 						.requestMatchers("/api/**").authenticated().anyRequest().denyAll())
-				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())))
+				.oauth2ResourceServer(oauth2 -> oauth2
+						.jwt(jwt -> jwt.decoder(jwtDecoder()).jwtAuthenticationConverter(jwtAuthenticationConverter())))
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.addFilterAfter(jwtDenylistFilter, BearerTokenAuthenticationFilter.class)
 				.cors(cors -> cors.configurationSource(corsConfigurationSource()))

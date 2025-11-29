@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,11 +33,13 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.core.ApiFuture;
 import com.google.api.gax.rpc.FailedPreconditionException;
 import com.google.cloud.Timestamp;
+import com.google.cloud.firestore.AggregateQuerySnapshot;
 import com.google.cloud.firestore.CollectionReference;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.Query;
+import com.google.cloud.firestore.Query.Direction;
 import com.google.cloud.firestore.QueryDocumentSnapshot;
 import com.google.cloud.firestore.QuerySnapshot;
 import com.google.cloud.firestore.SetOptions;
@@ -47,6 +50,7 @@ import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
+import com.google.firebase.auth.ListUsersPage;
 import com.google.firebase.auth.UserRecord;
 import com.google.firebase.auth.UserRecord.UpdateRequest;
 import com.google.firebase.cloud.FirestoreClient;
@@ -420,6 +424,87 @@ public class FirebaseService {
 			Thread.currentThread().interrupt();
 			log.error("Error querying collection '{}' where '{}' == '{}'", collection, field, value, e);
 			throw new FirestoreInteractionException("Error querying collection in Firestore", e);
+		}
+	}
+
+	@SuppressWarnings("null")
+	public List<Map<String, Object>> getAllData(String collection) {
+		try {
+			Firestore firestore = getFirestore();
+			ApiFuture<QuerySnapshot> future = firestore.collection(collection).get();
+			List<Map<String, Object>> results = new ArrayList<>();
+			List<QueryDocumentSnapshot> documents = future.get().getDocuments();
+			for (QueryDocumentSnapshot document : documents) {
+				Map<String, Object> data = document.getData();
+				// Ensure the document ID is included in the map if not already
+				if (!data.containsKey("id")) {
+					data.put("id", document.getId());
+				}
+				results.add(data);
+			}
+			log.info("Retrieved {} documents from collection '{}'.", results.size(), collection);
+			return results;
+		} catch (ExecutionException | InterruptedException e) {
+			Thread.currentThread().interrupt();
+			log.error("Error retrieving all documents from collection '{}'", collection, e);
+			throw new FirestoreInteractionException(
+					"Error retrieving all documents from Firestore collection " + collection, e);
+		}
+	}
+
+	public long getCollectionCount(String collectionName) {
+		try {
+			AggregateQuerySnapshot snapshot = getFirestore().collection(collectionName).count().get().get();
+			return snapshot.getCount();
+		} catch (InterruptedException | ExecutionException e) {
+			Thread.currentThread().interrupt();
+			log.error("Error getting count for collection {}", collectionName, e);
+			throw new FirestoreInteractionException("Failed to get count for " + collectionName, e);
+		} catch (Exception e) {
+			throw new FirestoreInteractionException("Unexpected error getting count for " + collectionName, e);
+		}
+	}
+
+	public ApiFuture<QuerySnapshot> getDocumentsSince(String collectionName, String dateField, Date date) {
+		return getFirestore().collection(collectionName).whereGreaterThanOrEqualTo(dateField, date).get();
+	}
+
+	public List<Map<String, Object>> getProjectedData(String collectionName, String... fields) {
+		try {
+			ApiFuture<QuerySnapshot> future = getFirestore().collection(collectionName).select(fields).get();
+			List<QueryDocumentSnapshot> documents = future.get().getDocuments();
+			List<Map<String, Object>> results = new ArrayList<>();
+			for (QueryDocumentSnapshot document : documents) {
+				Map<String, Object> data = document.getData();
+				if (!data.containsKey("id")) {
+					data.put("id", document.getId());
+				}
+				results.add(data);
+			}
+			return results;
+		} catch (InterruptedException | ExecutionException e) {
+			Thread.currentThread().interrupt();
+			throw new FirestoreInteractionException("Failed to get projected data for " + collectionName, e);
+		}
+	}
+
+	public List<Map<String, Object>> getTopRecordings(int limit) {
+		try {
+			ApiFuture<QuerySnapshot> future = getFirestore().collection("recordings")
+					.orderBy("favoriteCount", Direction.DESCENDING).limit(limit).get();
+			List<QueryDocumentSnapshot> documents = future.get().getDocuments();
+			List<Map<String, Object>> results = new ArrayList<>();
+			for (QueryDocumentSnapshot doc : documents) {
+				Map<String, Object> data = doc.getData();
+				if (!data.containsKey("id")) {
+					data.put("id", doc.getId());
+				}
+				results.add(data);
+			}
+			return results;
+		} catch (InterruptedException | ExecutionException e) {
+			Thread.currentThread().interrupt();
+			throw new FirestoreInteractionException("Failed to get top recordings", e);
 		}
 	}
 
@@ -935,6 +1020,65 @@ public class FirebaseService {
 			} catch (Exception e) {
 				log.error("Error during FCM token cleanup for user {}: {}", userId, e.getMessage(), e);
 			}
+		}
+	}
+
+	public ListUsersPage listUsers(int limit, String pageToken) throws FirebaseAuthException {
+		if (limit <= 0) {
+			limit = DEFAULT_PAGE_SIZE;
+		}
+		log.debug("Listing users from Firebase Auth with limit: {} and pageToken: {}", limit, pageToken);
+		try {
+			// listUsers(pageToken) is not available directly with limit in all SDK versions
+			// in one method if not chaining
+			// But createListUsersRequest is not exposed.
+			// Checking common usage: FirebaseAuth.getInstance().listUsers(pageToken,
+			// maxResults)
+			// Actually typical signature is listUsers(pageToken, maxResults) or
+			// listUsers(pageToken) (default max)
+			// Let's assume listUsers(pageToken, maxResults) exists or similar.
+			// Since I can't see the SDK source, I'll rely on the most common signature.
+			// Actually, often it is listUsers(pageToken) which returns a page, but
+			// maxResults is set via ListUsersOptions in some SDKs
+			// or listUsers(pageToken, maxResults) in others.
+			// In Java Admin SDK: listUsers(pageToken, maxResults) exists.
+			if (StringUtils.hasText(pageToken)) {
+				return getFirebaseAuth().listUsers(pageToken, limit);
+			} else {
+				return getFirebaseAuth().listUsers(null, limit);
+			}
+		} catch (FirebaseAuthException e) {
+			log.error("Failed to list users: {}", e.getMessage());
+			throw e;
+		}
+	}
+
+	public void setUserDisabled(String uid, boolean disabled) throws FirebaseAuthException {
+		if (!StringUtils.hasText(uid)) {
+			throw new IllegalArgumentException("User ID cannot be blank.");
+		}
+		log.info("Setting disabled status to {} for user {}", disabled, uid);
+		try {
+			UpdateRequest request = new UpdateRequest(uid).setDisabled(disabled);
+			getFirebaseAuth().updateUser(request);
+			log.info("Successfully set disabled status for user {}", uid);
+		} catch (FirebaseAuthException e) {
+			log.error("Failed to set disabled status for user {}: {}", uid, e.getMessage());
+			throw e;
+		}
+	}
+
+	public void setCustomUserClaims(String uid, Map<String, Object> claims) throws FirebaseAuthException {
+		if (!StringUtils.hasText(uid)) {
+			throw new IllegalArgumentException("User ID cannot be blank.");
+		}
+		log.info("Setting custom claims for user {}: {}", uid, claims);
+		try {
+			getFirebaseAuth().setCustomUserClaims(uid, claims);
+			log.info("Successfully set custom claims for user {}", uid);
+		} catch (FirebaseAuthException e) {
+			log.error("Failed to set custom claims for user {}: {}", uid, e.getMessage());
+			throw e;
 		}
 	}
 

@@ -31,12 +31,16 @@ public class User {
 	private List<String> recordingIds;
 	private List<String> favoriteRecordingIds;
 	private List<String> fcmTokens;
+	private boolean disabled;
+	private Date createdAt;
+	private Date lastLoginAt;
 
 	public User() {
 		this.recordingIds = new ArrayList<>();
 		this.favoriteRecordingIds = new ArrayList<>();
 		this.roles = new ArrayList<>();
 		this.fcmTokens = new ArrayList<>();
+		this.createdAt = new Date();
 		if (this.roles.isEmpty()) {
 			this.roles.add("ROLE_USER");
 		}
@@ -154,6 +158,30 @@ public class User {
 		this.fcmTokens = fcmTokens;
 	}
 
+	public boolean isDisabled() {
+		return disabled;
+	}
+
+	public void setDisabled(boolean disabled) {
+		this.disabled = disabled;
+	}
+
+	public Date getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(Date createdAt) {
+		this.createdAt = createdAt;
+	}
+
+	public Date getLastLoginAt() {
+		return lastLoginAt;
+	}
+
+	public void setLastLoginAt(Date lastLoginAt) {
+		this.lastLoginAt = lastLoginAt;
+	}
+
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new HashMap<>();
 		map.put("userId", userId);
@@ -168,6 +196,9 @@ public class User {
 		map.put("recordingIds", Objects.requireNonNullElseGet(recordingIds, ArrayList::new));
 		map.put("favoriteRecordingIds", Objects.requireNonNullElseGet(favoriteRecordingIds, ArrayList::new));
 		map.put("fcmTokens", Objects.requireNonNullElseGet(fcmTokens, ArrayList::new));
+		map.put("disabled", disabled);
+		map.put("createdAt", createdAt);
+		map.put("lastLoginAt", lastLoginAt);
 		return map;
 	}
 
@@ -202,6 +233,27 @@ public class User {
 
 		List<String> fcmTokens = (List<String>) map.get("fcmTokens");
 		user.fcmTokens = (fcmTokens != null) ? new ArrayList<>(fcmTokens) : new ArrayList<>();
+
+		if (map.containsKey("disabled")) {
+			Object disabledObj = map.get("disabled");
+			if (disabledObj instanceof Boolean) {
+				user.disabled = (Boolean) disabledObj;
+			}
+		}
+
+		Object createdAtObj = map.get("createdAt");
+		if (createdAtObj instanceof com.google.cloud.Timestamp) {
+			user.createdAt = ((com.google.cloud.Timestamp) createdAtObj).toDate();
+		} else if (createdAtObj instanceof Date) {
+			user.createdAt = (Date) createdAtObj;
+		}
+
+		Object lastLoginAtObj = map.get("lastLoginAt");
+		if (lastLoginAtObj instanceof com.google.cloud.Timestamp) {
+			user.lastLoginAt = ((com.google.cloud.Timestamp) lastLoginAtObj).toDate();
+		} else if (lastLoginAtObj instanceof Date) {
+			user.lastLoginAt = (Date) lastLoginAtObj;
+		}
 
 		return user;
 	}

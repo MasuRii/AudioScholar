@@ -20,11 +20,14 @@ public class Recording {
 	private String summaryId;
 	private String fileName;
 	private List<String> recommendationIds;
+	private Long fileSize;
+	private Integer favoriteCount;
 
 	public Recording() {
 		this.createdAt = new Date();
 		this.updatedAt = new Date();
 		this.recommendationIds = new ArrayList<>();
+		this.favoriteCount = 0;
 	}
 
 	public Recording(String recordingId, String userId, String title, String audioUrl) {
@@ -123,6 +126,22 @@ public class Recording {
 		this.recommendationIds = (recommendationIds != null) ? new ArrayList<>(recommendationIds) : new ArrayList<>();
 	}
 
+	public Long getFileSize() {
+		return fileSize;
+	}
+
+	public void setFileSize(Long fileSize) {
+		this.fileSize = fileSize;
+	}
+
+	public Integer getFavoriteCount() {
+		return favoriteCount;
+	}
+
+	public void setFavoriteCount(Integer favoriteCount) {
+		this.favoriteCount = favoriteCount;
+	}
+
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new HashMap<>();
 		if (recordingId != null)
@@ -148,6 +167,10 @@ public class Recording {
 		if (recommendationIds != null && !recommendationIds.isEmpty()) {
 			map.put("recommendationIds", recommendationIds);
 		}
+		if (fileSize != null)
+			map.put("fileSize", fileSize);
+		if (favoriteCount != null)
+			map.put("favoriteCount", favoriteCount);
 		return map;
 	}
 
@@ -179,6 +202,18 @@ public class Recording {
 		recording.duration = (String) map.get("duration");
 		recording.summaryId = (String) map.get("summaryId");
 		recording.fileName = (String) map.get("fileName");
+
+		Object fileSizeObj = map.get("fileSize");
+		if (fileSizeObj instanceof Number) {
+			recording.fileSize = ((Number) fileSizeObj).longValue();
+		}
+
+		Object favoriteCountObj = map.get("favoriteCount");
+		if (favoriteCountObj instanceof Number) {
+			recording.favoriteCount = ((Number) favoriteCountObj).intValue();
+		} else {
+			recording.favoriteCount = 0;
+		}
 
 		Object recIdsObj = map.get("recommendationIds");
 		if (recIdsObj instanceof List) {
@@ -237,6 +272,18 @@ public class Recording {
 		recording.duration = (String) map.get("duration");
 		recording.summaryId = (String) map.get("summaryId");
 		recording.fileName = (String) map.get("fileName");
+
+		Object fileSizeObj = map.get("fileSize");
+		if (fileSizeObj instanceof Number) {
+			recording.fileSize = ((Number) fileSizeObj).longValue();
+		}
+
+		Object favoriteCountObj = map.get("favoriteCount");
+		if (favoriteCountObj instanceof Number) {
+			recording.favoriteCount = ((Number) favoriteCountObj).intValue();
+		} else {
+			recording.favoriteCount = 0;
+		}
 
 		Object recIdsObj = map.get("recommendationIds");
 		if (recIdsObj instanceof List) {

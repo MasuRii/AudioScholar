@@ -27,6 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.google.cloud.firestore.FieldValue;
 import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.ListUsersPage;
 import com.google.firebase.auth.UserRecord;
 
 import edu.cit.audioscholar.dto.RegistrationRequest;
@@ -659,5 +660,55 @@ public class UserService {
 		log.info("Changing password for user ID: {}", userId);
 		firebaseService.updateUserPassword(userId, newPassword);
 		log.info("Password successfully changed for user ID: {}", userId);
+	}
+
+	public ListUsersPage getAllUsers(int limit, String pageToken) throws FirebaseAuthException {
+		return firebaseService.listUsers(limit, pageToken);
+	}
+
+	@CacheEvict(value = USER_CACHE, key = "#uid")
+	public void updateUserStatus(String uid, boolean disabled)
+			throws FirebaseAuthException, FirestoreInteractionException {
+		if (!StringUtils.hasText(uid)) {
+			log.error("Cannot update status for blank UID.");
+			throw new IllegalArgumentException("User ID cannot be blank.");
+		}
+		log.info("Updating disabled status to {} for user {}", disabled, uid);
+
+		// 1. Update Firebase Auth
+		firebaseService.setUserDisabled(uid, disabled);
+
+		// 2. Update Firestore (best effort / consistency)
+		try {
+			firebaseService.updateDataWithMap(COLLECTION_NAME, uid, Map.of("disabled", disabled));
+		} catch (Exception e) {
+			log.warn(
+					"Failed to update disabled status in Firestore for user {}, but Auth status was updated. Error: {}",
+					uid, e.getMessage());
+		}
+	}
+
+	@CacheEvict(value = USER_CACHE, key = "#uid")
+	public void updateUserRoles(String uid, List<String> roles)
+			throws FirebaseAuthException, FirestoreInteractionException {
+		if (!StringUtils.hasText(uid)) {
+			log.error("Cannot update roles for blank UID.");
+			throw new IllegalArgumentException("User ID cannot be blank.");
+		}
+		if (roles == null || roles.isEmpty()) {
+			log.error("Cannot update roles with empty list for user {}", uid);
+			throw new IllegalArgumentException("Roles list cannot be empty.");
+		}
+
+		log.info("Updating roles for user {}: {}", uid, roles);
+
+		// 1. Update Firestore
+		firebaseService.updateDataWithMap(COLLECTION_NAME, uid, Map.of("roles", roles));
+
+		// 2. Update Firebase Auth Custom Claims
+		// We wrap roles in a map as setCustomUserClaims expects Map<String, Object>
+		Map<String, Object> claims = Map.of("roles", roles);
+		firebaseService.setCustomUserClaims(uid, claims);
+		log.info("Roles updated in both Firestore and Firebase Auth claims for user {}", uid);
 	}
 }
