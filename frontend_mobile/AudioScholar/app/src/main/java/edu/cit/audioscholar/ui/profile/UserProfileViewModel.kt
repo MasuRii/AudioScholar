@@ -30,7 +30,8 @@ sealed interface ProfileContentState {
         val email: String,
         val profileImageUrl: String?,
         val isPremium: Boolean,
-        val hasPasswordProvider: Boolean
+        val hasPasswordProvider: Boolean,
+        val isAdmin: Boolean
     ) : ProfileContentState
 }
 
@@ -102,6 +103,7 @@ class UserProfileViewModel @Inject constructor(
                                 Log.i("UserProfileViewModel", "Profile loaded: ${profileData.displayName}")
                                 premiumStatusManager.updatePremiumStatus(profileData)
                                 val isPremium = premiumStatusManager.isPremiumUser()
+                                val isAdmin = profileData.roles?.contains("ROLE_ADMIN") == true
                                 val hasPasswordProvider = firebaseAuth.currentUser?.providerData?.any {
                                     it.providerId == EmailAuthProvider.PROVIDER_ID
                                 } ?: false
@@ -113,7 +115,8 @@ class UserProfileViewModel @Inject constructor(
                                             email = profileData.email ?: "",
                                             profileImageUrl = profileData.profileImageUrl,
                                             isPremium = isPremium,
-                                            hasPasswordProvider = hasPasswordProvider
+                                            hasPasswordProvider = hasPasswordProvider,
+                                            isAdmin = isAdmin
                                         )
                                     )
                                 }
@@ -142,6 +145,7 @@ class UserProfileViewModel @Inject constructor(
                                 } else {
                                     premiumStatusManager.isPremiumUser()
                                 }
+                                val isAdmin = cachedData.roles?.contains("ROLE_ADMIN") == true
                                 val hasPasswordProvider = firebaseAuth.currentUser?.providerData?.any {
                                     it.providerId == EmailAuthProvider.PROVIDER_ID
                                 } ?: false
@@ -153,7 +157,8 @@ class UserProfileViewModel @Inject constructor(
                                             email = cachedData.email ?: "",
                                             profileImageUrl = cachedData.profileImageUrl,
                                             isPremium = isPremium,
-                                            hasPasswordProvider = hasPasswordProvider
+                                            hasPasswordProvider = hasPasswordProvider,
+                                            isAdmin = isAdmin
                                         )
                                     )
                                 }

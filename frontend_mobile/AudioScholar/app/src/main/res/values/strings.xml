@@ -468,4 +468,16 @@
     <string name="email_verification_verified">Email verified successfully!</string>
     <string name="email_verification_sent">Verification email sent.</string>
     <string name="email_verification_check_button">I\'ve Verified My Email</string>
+
+    <!-- Admin Dashboard -->
+    <string name="nav_admin_dashboard">Admin Dashboard</string>
+    <string name="nav_admin_user_management">User Management</string>
+    <string name="nav_admin_analytics">Analytics</string>
+    <string name="admin_dashboard_title">Admin Dashboard</string>
+    <string name="admin_stats_total_users">Total Users</string>
+    <string name="admin_stats_total_recordings">Total Recordings</string>
+    <string name="admin_stats_storage_used">Storage Used</string>
+    <string name="admin_stats_total_duration">Total Duration</string>
+    <string name="admin_btn_manage_users">Manage Users</string>
+    <string name="admin_btn_view_analytics">View Analytics</string>
 </resources>

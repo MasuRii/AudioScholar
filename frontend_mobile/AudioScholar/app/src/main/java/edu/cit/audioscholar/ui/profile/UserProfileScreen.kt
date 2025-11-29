@@ -221,6 +221,22 @@ fun UserProfileScreen(
                         }
                     }
 
+                    if (content.isAdmin) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = { navController.navigate(Screen.AdminDashboard.route) },
+                            modifier = Modifier.fillMaxWidth(0.8f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiary,
+                                contentColor = MaterialTheme.colorScheme.onTertiary
+                            )
+                        ) {
+                            Icon(Icons.Filled.Dashboard, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                            Text(stringResource(R.string.nav_admin_dashboard))
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(32.dp))
 
                     Button(

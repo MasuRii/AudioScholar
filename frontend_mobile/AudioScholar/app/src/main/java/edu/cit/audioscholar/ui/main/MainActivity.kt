@@ -47,6 +47,9 @@ import edu.cit.audioscholar.ui.auth.*
 import edu.cit.audioscholar.ui.details.RecordingDetailsScreen
 import edu.cit.audioscholar.ui.library.LibraryScreen
 import edu.cit.audioscholar.ui.onboarding.OnboardingScreen
+import edu.cit.audioscholar.ui.admin.AdminAnalyticsScreen
+import edu.cit.audioscholar.ui.admin.AdminDashboardScreen
+import edu.cit.audioscholar.ui.admin.AdminUserListScreen
 import edu.cit.audioscholar.ui.profile.EditProfileScreen
 import edu.cit.audioscholar.ui.profile.UserProfileScreen
 import edu.cit.audioscholar.ui.recording.RecordingScreen
@@ -90,6 +93,10 @@ sealed class Screen(val route: String, val labelResId: Int, val icon: ImageVecto
         fun createRoute(code: String) = "reset_password_confirm?oobCode=$code"
     }
     object SubscriptionPricing : Screen("subscription_pricing", R.string.nav_audioscholar_pro, Icons.Filled.School)
+
+    object AdminDashboard : Screen("admin_dashboard", R.string.nav_admin_dashboard, Icons.Filled.Dashboard)
+    object AdminUserManagement : Screen("admin_user_management", R.string.nav_admin_user_management, Icons.Filled.People)
+    object AdminAnalytics : Screen("admin_analytics", R.string.nav_admin_analytics, Icons.Filled.Analytics)
 
     companion object {
         const val ARG_PLAN_ID = "planId"
@@ -824,6 +831,15 @@ fun MainAppScreen(
                     drawerState = drawerState,
                     scope = scope
                 )
+            }
+            composable(Screen.AdminDashboard.route) {
+                AdminDashboardScreen(navController = navController)
+            }
+            composable(Screen.AdminUserManagement.route) {
+                AdminUserListScreen(navController = navController)
+            }
+            composable(Screen.AdminAnalytics.route) {
+                AdminAnalyticsScreen(navController = navController)
             }
             composable(
                 route = Screen.Login.route,
