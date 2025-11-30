@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -92,6 +93,9 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 					"OAuth2 login successful. Redirecting using SavedRequestAwareAuthenticationSuccessHandler. Frontend should call /api/auth/token if JWT is needed.");
 			this.delegate.onAuthenticationSuccess(request, response, authentication);
 
+		} catch (DisabledException e) {
+			logger.warn("Login attempt by disabled user: {}", email);
+			response.sendRedirect("/login?error=account_disabled");
 		} catch (FirestoreInteractionException e) {
 			logger.error("Error processing user login for email {}: {}", email, e.getMessage(), e);
 			response.sendRedirect("/login?error=profile_error");
@@ -107,6 +111,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
 		User user = userService.findUserByEmail(email);
 
 		if (user != null) {
+			if (user.isDisabled()) {
+				throw new DisabledException("User account is disabled");
+			}
+
 			logger.info("Found existing user with email {}. User ID: {}", email, user.getUserId());
 
 			boolean needsUpdate = false;

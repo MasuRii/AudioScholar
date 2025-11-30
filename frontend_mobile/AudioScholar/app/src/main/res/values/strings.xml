@@ -437,7 +437,7 @@
     <string name="login_error_missing_api_token">Login failed: Missing API token from server.</string>
     <string name="login_error_server_validation">Login failed: Server validation error.</string>
     <string name="login_error_invalid_credentials">Invalid email or password.</string>
-    <string name="login_error_account_disabled">This account has been disabled.</string>
+    <string name="login_error_account_disabled">Your account has been suspended. If you believe this is a mistake, please reach out to our support team.</string>
     <string name="login_error_generic">Login failed: %1$s</string>
     <string name="login_error_google_signin">Google Sign-In failed or cancelled.</string>
     <string name="login_error_github_code_missing">GitHub login failed: Authorization code missing.</string>

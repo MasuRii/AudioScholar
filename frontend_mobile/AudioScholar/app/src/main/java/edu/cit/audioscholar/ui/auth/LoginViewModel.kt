@@ -271,7 +271,12 @@ class LoginViewModel @Inject constructor(
                     }
                     is Resource.Error -> {
                         Log.w(TAG, "Backend verification failed: ${backendResult.message}")
-                        _uiState.update { it.copy(isEmailLoginLoading = false, errorMessage = UiText.StringResource(R.string.login_error_server_validation)) }
+                        val errorText = if (backendResult.message?.contains("disabled", ignoreCase = true) == true) {
+                            UiText.StringResource(R.string.login_error_account_disabled)
+                        } else {
+                            UiText.StringResource(R.string.login_error_server_validation)
+                        }
+                        _uiState.update { it.copy(isEmailLoginLoading = false, errorMessage = errorText) }
                         firebaseAuth.signOut()
                     }
                     is Resource.Loading -> {}
@@ -365,7 +370,12 @@ class LoginViewModel @Inject constructor(
                     }
                     is Resource.Error -> {
                         Log.w(TAG, "[GoogleSignIn] Backend Error: ${backendResult.message}")
-                        _uiState.update { it.copy(isGoogleLoginLoading = false, errorMessage = UiText.StringResource(R.string.login_error_server_validation)) }
+                        val errorText = if (backendResult.message?.contains("disabled", ignoreCase = true) == true) {
+                            UiText.StringResource(R.string.login_error_account_disabled)
+                        } else {
+                            UiText.StringResource(R.string.login_error_server_validation)
+                        }
+                        _uiState.update { it.copy(isGoogleLoginLoading = false, errorMessage = errorText) }
                     }
                     is Resource.Loading -> {}
                 }
@@ -485,7 +495,12 @@ class LoginViewModel @Inject constructor(
                 }
                 is Resource.Error -> {
                     Log.w(TAG, "[GitHubRedirect] Backend Error: ${backendResult.message}")
-                    finalState = finalState.copy(isGitHubLoginLoading = false, errorMessage = UiText.StringResource(R.string.login_error_server_validation))
+                    val errorText = if (backendResult.message?.contains("disabled", ignoreCase = true) == true) {
+                        UiText.StringResource(R.string.login_error_account_disabled)
+                    } else {
+                        UiText.StringResource(R.string.login_error_server_validation)
+                    }
+                    finalState = finalState.copy(isGitHubLoginLoading = false, errorMessage = errorText)
                 }
                 is Resource.Loading -> {
                 }

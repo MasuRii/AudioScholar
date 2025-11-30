@@ -35,6 +35,8 @@ class AdminUserListViewModel @Inject constructor(
     }
 
     fun loadUsers(reset: Boolean = false) {
+        if (_uiState.value.isLoading && !reset) return
+
         if (reset) {
             _uiState.update { it.copy(users = emptyList(), nextPageToken = null) }
         }
@@ -57,22 +59,24 @@ class AdminUserListViewModel @Inject constructor(
                         val newUsers = result.data?.users ?: emptyList()
                         val newToken = result.data?.pageToken
                         _uiState.update { state ->
+                            val allUsers = if (reset) newUsers else state.users + newUsers
                             state.copy(
                                 isLoading = false,
-                                users = if (reset) newUsers else state.users + newUsers,
+                                users = allUsers.distinctBy { it.uid },
                                 nextPageToken = newToken,
                                 error = null
                             )
                         }
                     }
                     is Resource.Error -> {
-                        _uiState.update { 
+                        _uiState.update {
                             it.copy(
-                                isLoading = false, 
+                                isLoading = false,
                                 error = result.message ?: "Failed to load users"
-                            ) 
+                            )
                         }
                     }
+                    else -> Unit
                 }
             }
         }
@@ -98,6 +102,7 @@ class AdminUserListViewModel @Inject constructor(
                     is Resource.Loading -> {
                         // Optional: Show loading indicator for specific user item if needed
                     }
+                    else -> Unit
                 }
             }
         }

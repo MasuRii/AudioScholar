@@ -207,6 +207,12 @@ public class AuthController {
 
 			User user = userService.findOrCreateUserByFirebaseDetails(uid, email, name, provider, providerId, photoUrl);
 
+			if (user.isDisabled()) {
+				log.warn("Login attempt rejected for disabled user: {}", uid);
+				return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new AuthResponse(false,
+						"Your account has been disabled. Please contact support for assistance."));
+			}
+
 			List<SimpleGrantedAuthority> authorities = user.getRoles().stream().map(SimpleGrantedAuthority::new)
 					.collect(Collectors.toList());
 			Authentication authentication = new UsernamePasswordAuthenticationToken(uid, null, authorities);
@@ -321,6 +327,12 @@ public class AuthController {
 			User user = userService.findOrCreateUserByFirebaseDetails(firebaseUid, firebaseUserRecord.getEmail(),
 					firebaseUserRecord.getDisplayName(), provider, providerId, firebaseUserRecord.getPhotoUrl());
 
+			if (user.isDisabled()) {
+				log.warn("Google login attempt rejected for disabled user: {}", firebaseUid);
+				return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new AuthResponse(false,
+						"Your account has been disabled. Please contact support for assistance."));
+			}
+
 			List<SimpleGrantedAuthority> authorities = user.getRoles().stream().map(SimpleGrantedAuthority::new)
 					.collect(Collectors.toList());
 			Authentication authentication = new UsernamePasswordAuthenticationToken(firebaseUid, null, authorities);
@@ -424,6 +436,14 @@ public class AuthController {
 								User appUser = userService.findOrCreateUserByFirebaseDetails(firebaseUid,
 										firebaseUserRecord.getEmail(), nameFromFirebase, provider, providerId,
 										photoFromFirebase);
+
+								if (appUser.isDisabled()) {
+									log.warn("GitHub login attempt rejected for disabled user: {}", firebaseUid);
+									return Mono.just(ResponseEntity.status(HttpStatus.FORBIDDEN).body(new AuthResponse(
+											false,
+											"Your account has been disabled. Please contact support for assistance.")));
+								}
+
 								Instant firestoreEnd = Instant.now();
 								log.info("Firestore find/create successful for UID {}. Duration: {}ms", firebaseUid,
 										Duration.between(firestoreStart, firestoreEnd).toMillis());

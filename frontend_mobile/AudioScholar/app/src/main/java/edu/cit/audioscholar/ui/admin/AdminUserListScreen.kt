@@ -148,22 +148,67 @@ fun AdminUserItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (user.disabled) {
-                    Text(
-                        text = "DISABLED",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+
+                Row(modifier = Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (user.disabled) {
+                        SuggestionChip(
+                            onClick = { },
+                            label = { Text("DISABLED", style = MaterialTheme.typography.labelSmall) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                labelColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        )
+                    }
+
+                    if (user.isAdmin) {
+                        SuggestionChip(
+                            onClick = { },
+                            label = { Text("ADMIN", style = MaterialTheme.typography.labelSmall) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                labelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        )
+                    } else if (user.isPremium) {
+                        SuggestionChip(
+                            onClick = { },
+                            label = { Text("PREMIUM", style = MaterialTheme.typography.labelSmall) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                labelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        )
+                    } else {
+                        // Normal user - can optionally show a chip or nothing
+                        Text(
+                            text = "Normal",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.align(Alignment.CenterVertically)
+                        )
+                    }
                 }
             }
 
-            IconButton(onClick = onToggleStatus) {
-                Icon(
-                    imageVector = if (user.disabled) Icons.Default.CheckCircle else Icons.Default.Block,
-                    contentDescription = if (user.disabled) "Enable User" else "Disable User",
-                    tint = if (user.disabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-                )
+            if (!user.isAdmin) {
+                IconButton(onClick = onToggleStatus) {
+                    Icon(
+                        imageVector = if (user.disabled) Icons.Default.CheckCircle else Icons.Default.Block,
+                        contentDescription = if (user.disabled) "Enable User" else "Disable User",
+                        tint = if (user.disabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    )
+                }
+            } else {
+                // Spacer or disabled visual to maintain layout balance if needed, or just nothing.
+                // Displaying a disabled icon to indicate they are protected.
+                IconButton(onClick = { }, enabled = false) {
+                    Icon(
+                        imageVector = Icons.Default.Block,
+                        contentDescription = "Cannot disable admin",
+                        tint = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
             }
         }
     }
