@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -79,14 +80,14 @@ fun AdminAnalyticsScreen(
                     // Activity Stats
                     uiState.activityStats?.let { stats ->
                         AnalyticsSection(title = "New Users (Last 30 Days)") {
-                            SimpleBarChart(
+                            HorizontalBarChart(
                                 data = stats.newUsersLast30Days,
                                 barColor = MaterialTheme.colorScheme.primary
                             )
                         }
 
                         AnalyticsSection(title = "New Recordings (Last 30 Days)") {
-                            SimpleBarChart(
+                            HorizontalBarChart(
                                 data = stats.newRecordingsLast30Days,
                                 barColor = MaterialTheme.colorScheme.secondary
                             )
@@ -127,9 +128,9 @@ fun AdminAnalyticsScreen(
                         AnalyticsSection(title = "Top Engaging Content (Favorites)") {
                             // Prepare data for bar chart
                             val engagementData = uiState.contentEngagement.associate {
-                                (if (it.title.length > 10) it.title.take(10) + "..." else it.title) to it.favoriteCount.toLong()
+                                it.title to it.favoriteCount.toLong()
                             }
-                            SimpleBarChart(
+                            HorizontalBarChart(
                                 data = engagementData,
                                 barColor = MaterialTheme.colorScheme.tertiary
                             )
@@ -257,7 +258,7 @@ fun SimplePieChart(
 }
 
 @Composable
-fun SimpleBarChart(
+fun HorizontalBarChart(
     data: Map<String, Long>,
     barColor: Color,
     modifier: Modifier = Modifier
@@ -267,82 +268,50 @@ fun SimpleBarChart(
         return
     }
 
-    val maxValue = data.values.maxOrNull() ?: 0L
-    val effectiveMax = max(maxValue, 5L) // Ensure at least some height
-    val keys = data.keys.toList()
-    val values = data.values.toList()
-    
-    // Text paint for axis labels
-    val textPaint = remember {
-        Paint().apply {
-            color = android.graphics.Color.GRAY
-            textSize = 30f
-            textAlign = Paint.Align.CENTER
-        }
-    }
+    val maxValue = data.values.maxOrNull() ?: 1L
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-        ) {
-            val canvasWidth = size.width
-            val canvasHeight = size.height
-            val bottomPadding = 80f // Space for labels
-            val chartHeight = canvasHeight - bottomPadding
-            
-            val barWidth = (canvasWidth / values.size) * 0.6f
-            val spacing = (canvasWidth / values.size) * 0.4f
-            
-            values.forEachIndexed { index, value ->
-                val barHeight = (value.toFloat() / effectiveMax) * chartHeight
-                val left = index * (barWidth + spacing) + (spacing / 2)
-                val top = chartHeight - barHeight
-                val right = left + barWidth
-                val bottom = chartHeight
-                
-                // Draw Bar
-                drawRect(
-                    color = barColor,
-                    topLeft = Offset(left, top),
-                    size = Size(barWidth, barHeight)
-                )
-                
-                // Draw Value above bar if enough space and not too many bars
-                if (values.size < 15) {
-                   drawContext.canvas.nativeCanvas.drawText(
-                       value.toString(),
-                       left + barWidth / 2,
-                       top - 10f,
-                       textPaint
-                   )
+        data.forEach { (label, value) ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = value.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-
-                // Draw Label (simplified - maybe just first letter or index if too crowded)
-                // For dates, maybe show every 5th or just Start/End if crowded
-                val shouldShowLabel = if (values.size > 15) index % 5 == 0 else true
                 
-                if (shouldShowLabel) {
-                    val label = keys[index]
-                    val shortLabel = if (label.length > 5) label.take(3) + ".." else label
-                    
-                    drawContext.canvas.nativeCanvas.drawText(
-                        shortLabel,
-                        left + barWidth / 2,
-                        canvasHeight - 20f, // Near bottom
-                        textPaint
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                val fraction = if (maxValue > 0) value.toFloat() / maxValue else 0f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(24.dp)
+                        .background(Color.LightGray.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .background(barColor, RoundedCornerShape(4.dp))
                     )
                 }
             }
-            
-            // Draw baseline
-            drawLine(
-                color = Color.Gray,
-                start = Offset(0f, chartHeight),
-                end = Offset(canvasWidth, chartHeight),
-                strokeWidth = 2f
-            )
         }
     }
 }

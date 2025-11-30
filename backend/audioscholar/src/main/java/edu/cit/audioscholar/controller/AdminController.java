@@ -16,8 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.google.firebase.auth.ListUsersPage;
-
 import edu.cit.audioscholar.dto.AdminUpdateUserRolesRequest;
 import edu.cit.audioscholar.dto.AdminUpdateUserStatusRequest;
 import edu.cit.audioscholar.service.UserService;
@@ -53,11 +51,8 @@ public class AdminController {
 			@RequestParam(required = false) String pageToken) {
 		logger.info("Admin request to list users. Limit: {}, PageToken: {}", limit, pageToken);
 		try {
-			ListUsersPage page = userService.getAllUsers(limit, pageToken);
-			Map<String, Object> response = new HashMap<>();
-			// ListUsersPage is iterable, values contains UserRecord objects
-			response.put("users", page.getValues());
-			response.put("pageToken", page.getNextPageToken());
+			// Retrieve users from Firestore to ensure consistent role mapping
+			Map<String, Object> response = userService.getAllUsersFromFirestore(limit, pageToken);
 			return ResponseEntity.ok(response);
 		} catch (Exception e) {
 			logger.error("Error listing users: {}", e.getMessage(), e);

@@ -7,6 +7,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,6 +32,7 @@ import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.ListUsersPage;
 import com.google.firebase.auth.UserRecord;
 
+import edu.cit.audioscholar.dto.AdminUserListItemDto;
 import edu.cit.audioscholar.dto.RegistrationRequest;
 import edu.cit.audioscholar.dto.UpdateUserProfileRequest;
 import edu.cit.audioscholar.exception.FirestoreInteractionException;
@@ -664,6 +667,37 @@ public class UserService {
 
 	public ListUsersPage getAllUsers(int limit, String pageToken) throws FirebaseAuthException {
 		return firebaseService.listUsers(limit, pageToken);
+	}
+
+	public Map<String, Object> getAllUsersFromFirestore(int limit, String pageToken) {
+		List<Map<String, Object>> usersData = firebaseService.getUsersFromFirestore(limit, pageToken);
+		List<AdminUserListItemDto> users = new ArrayList<>();
+		String nextPageToken = null;
+
+		for (Map<String, Object> data : usersData) {
+			User user = User.fromMap(data);
+			if (user != null) {
+				// Map User to AdminUserListItemDto
+				String uid = user.getUserId();
+				String email = user.getEmail();
+				String displayName = user.getDisplayName();
+				String photoUrl = user.getProfileImageUrl();
+				boolean disabled = user.isDisabled();
+				List<String> roles = user.getRoles();
+				boolean emailVerified = false; // Not stored in Firestore, defaulting to false for list view
+
+				users.add(new AdminUserListItemDto(uid, email, displayName, photoUrl, disabled, emailVerified, roles));
+			}
+		}
+
+		if (!users.isEmpty() && users.size() == limit) {
+			nextPageToken = users.get(users.size() - 1).uid();
+		}
+
+		Map<String, Object> result = new HashMap<>();
+		result.put("users", users);
+		result.put("pageToken", nextPageToken);
+		return result;
 	}
 
 	@CacheEvict(value = USER_CACHE, key = "#uid")

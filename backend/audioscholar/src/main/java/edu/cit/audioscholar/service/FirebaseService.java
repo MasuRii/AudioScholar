@@ -1112,6 +1112,43 @@ public class FirebaseService {
 		}
 	}
 
+	@SuppressWarnings("null")
+	public List<Map<String, Object>> getUsersFromFirestore(int limit, String lastUserId)
+			throws FirestoreInteractionException {
+		log.info("Retrieving users from Firestore. Limit: {}, LastUserId: {}", limit, lastUserId);
+		try {
+			Firestore firestore = getFirestore();
+			CollectionReference colRef = firestore.collection("users");
+			Query query = colRef.orderBy("userId").limit(limit);
+
+			if (StringUtils.hasText(lastUserId)) {
+				DocumentSnapshot lastSnapshot = colRef.document(lastUserId).get().get();
+				if (lastSnapshot.exists()) {
+					query = query.startAfter(lastSnapshot);
+				} else {
+					log.warn("Last user ID {} not found for pagination. Starting from beginning.", lastUserId);
+				}
+			}
+
+			ApiFuture<QuerySnapshot> future = query.get();
+			List<QueryDocumentSnapshot> documents = future.get().getDocuments();
+			List<Map<String, Object>> users = new ArrayList<>();
+			for (QueryDocumentSnapshot document : documents) {
+				Map<String, Object> data = document.getData();
+				if (!data.containsKey("userId")) {
+					data.put("userId", document.getId());
+				}
+				users.add(data);
+			}
+			log.info("Retrieved {} users from Firestore.", users.size());
+			return users;
+		} catch (ExecutionException | InterruptedException e) {
+			Thread.currentThread().interrupt();
+			log.error("Error retrieving users from Firestore", e);
+			throw new FirestoreInteractionException("Failed to retrieve users from Firestore", e);
+		}
+	}
+
 	public void updateAudioMetadataStatusAndReason(String metadataId, @Nullable String userId, ProcessingStatus status,
 			String reason) throws ExecutionException, InterruptedException {
 		if (metadataId == null || status == null) {
