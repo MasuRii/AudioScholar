@@ -178,7 +178,7 @@ const SignIn = () => {
 
         const handleGithubSignIn = () => {
                 setGithubLoading(true);
-                const githubClientId = 'Ov23li4Q5QeQlmr2YtJj';
+                const githubClientId = 'Iv23liMzUNGL8JuXu40i';
 
                 // Use the Frontend Callback URL.
                 // The frontend (GithubAuthCallback.jsx) will receive the code and then send it to the backend.
