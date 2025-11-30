@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import NoteList from '../../components/Notes/NoteList';
 //text
 const Summaryview = () => {
   const { recordingId } = useParams();
@@ -69,7 +70,6 @@ const Summaryview = () => {
     detailedSummary,
     practiceQuestions,
     transcript,
-    myNotes
   } = summaryData;
 
   return (
@@ -196,8 +196,7 @@ const Summaryview = () => {
 
             {activeTab === 'myNotes' && (
               <div className="bg-gray-50 p-4 rounded-lg text-gray-700">
-                <h3 className="text-md font-semibold mb-3">My Notes</h3>
-                <p>{myNotes}</p>
+                <NoteList recordingId={recordingId} />
               </div>
             )}
           </div>

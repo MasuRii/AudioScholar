@@ -98,6 +98,9 @@ const UserProfile = () => {
               ) : (
                 <span className="bg-gray-200 text-gray-700 text-sm font-semibold px-3 py-1 rounded-full shadow-md">Basic Account</span>
               )}
+              {user?.roles?.includes('ROLE_ADMIN') && (
+                <span className="mt-2 bg-purple-400 text-purple-900 text-sm font-semibold px-3 py-1 rounded-full shadow-md">Admin User</span>
+              )}
             </div>
 
             <div className="bg-white dark:bg-gray-800 p-8 md:p-10 transition-colors duration-200">
@@ -129,6 +132,14 @@ const UserProfile = () => {
               </div>
 
               <div className="mt-8 text-right space-x-4">
+                {user?.roles?.includes('ROLE_ADMIN') && (
+                  <Link
+                    to="/admin"
+                    className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200 transform hover:-translate-y-0.5"
+                  >
+                    Admin Dashboard
+                  </Link>
+                )}
                 <Link
                   to="/profile/edit"
                   className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[#2D8A8A] hover:bg-[#236b6b] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D8A8A] transition-colors duration-200 transform hover:-translate-y-0.5"

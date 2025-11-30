@@ -17,6 +17,10 @@ import SubscriptionTierPage from '../../pages/Subscription/SubscriptionTierPage'
 import Uploading from '../../pages/Upload/Uploading';
 import UserProfile from '../../pages/UserProfile/UserProfile';
 import UserProfileEdit from '../../pages/UserProfileEdit/UserProfileEdit';
+import AdminLayout from '../../pages/Admin/AdminLayout';
+import AdminDashboard from '../../pages/Admin/Dashboard/AdminDashboard';
+import AdminUserList from '../../pages/Admin/Users/AdminUserList';
+import AdminAnalytics from '../../pages/Admin/Analytics/AdminAnalytics';
 import PrivacyPolicy from '../../pages/Legal/PrivacyPolicy';
 import TermsOfService from '../../pages/Legal/TermsOfService';
 import ProtectedRoute from '../common/ProtectedRoute';
@@ -69,6 +73,17 @@ function App() {
               <UserProfileEdit />
             </ProtectedRoute>
           } />
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={
+            <ProtectedRoute>
+              <AdminLayout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUserList />} />
+            <Route path="analytics" element={<AdminAnalytics />} />
+          </Route>
 
           <Route path="/subscribe" element={
             <ProtectedRoute>
