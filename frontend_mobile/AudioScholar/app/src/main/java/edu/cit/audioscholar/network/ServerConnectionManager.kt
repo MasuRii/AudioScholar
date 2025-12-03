@@ -13,7 +13,7 @@ object ServerConnectionManager {
 
     private const val DEV_URL = "https://mastodon-balanced-randomly.ngrok-free.app/"
     private const val LOCAL_URL = "http://192.168.137.1:8080/"
-    private const val PROD_URL = "https://it342-g3-audioscholar-onrender-com.onrender.com/"
+    private const val PROD_URL = "https://audio-scholar.onrender.com/"
 
     var currentBaseUrl: String = PROD_URL
         private set
