@@ -12,7 +12,7 @@ const getApiBaseUrl = () => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
         return 'http://localhost:8080/';
     } else {
-        return 'https://audio-scholar.onrender.com/';
+        return 'https://it342-g3-audioscholar-onrender-com.onrender.com/';
     }
 };
 ```
