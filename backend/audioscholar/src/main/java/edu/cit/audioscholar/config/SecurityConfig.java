@@ -70,7 +70,12 @@ public class SecurityConfig {
 			// Try retrieving as a List (standard for JSON arrays in JWT)
 			List<String> rolesList = jwt.getClaimAsStringList("roles");
 			if (rolesList != null) {
-				return rolesList.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList());
+				return rolesList.stream().map(role -> {
+					if (!role.startsWith("ROLE_")) {
+						return new SimpleGrantedAuthority("ROLE_" + role);
+					}
+					return new SimpleGrantedAuthority(role);
+				}).collect(Collectors.toList());
 			}
 
 			// Fallback: Try retrieving as a comma-separated String
@@ -79,9 +84,11 @@ public class SecurityConfig {
 				return Collections.emptyList();
 			}
 			return Arrays.stream(roles.split(",")).map(role -> {
-				// Ensure role starts with ROLE_ if convention dictates, but usually JWT already
-				// has it
-				return new SimpleGrantedAuthority(role.trim());
+				String trimmedRole = role.trim();
+				if (!trimmedRole.startsWith("ROLE_")) {
+					return new SimpleGrantedAuthority("ROLE_" + trimmedRole);
+				}
+				return new SimpleGrantedAuthority(trimmedRole);
 			}).collect(Collectors.toList());
 		});
 		return jwtAuthenticationConverter;
