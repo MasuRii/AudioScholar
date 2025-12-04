@@ -26,8 +26,7 @@ public class WebConfig implements WebMvcConfigurer {
 		registry.addMapping("/**")
 				.allowedOrigins("http://localhost:8100", "https://localhost:8100", "capacitor://localhost",
 						"http://localhost", "https://localhost", "http://localhost:5173", "https://localhost:5173",
-						"http://localhost:8080", "https://localhost:8080",
-						"https://audio-scholar.onrender.com")
+						"http://localhost:8080", "https://localhost:8080", "https://audio-scholar.onrender.com", "https://actively-guided-mackerel.ngrok-free.app")
 				.allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH").allowedHeaders("Authorization",
 						"Cache-Control", "Content-Type", "X-Requested-With", "Accept", "X-CSRF-TOKEN")
 				.allowCredentials(true).exposedHeaders("Authorization").maxAge(3600);

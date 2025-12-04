@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import NoteList from '../../components/Notes/NoteList';
+import { API_BASE_URL } from '../../services/authService';
 //text
 const Summaryview = () => {
   const { recordingId } = useParams();
@@ -21,7 +22,7 @@ const Summaryview = () => {
           setLoading(false);
         } else {
           const token = localStorage.getItem('AuthToken');
-          const response = await fetch(`http://localhost:8080/api/recordings/${recordingId}`, {
+          const response = await fetch(`${API_BASE_URL}api/recordings/${recordingId}`, {
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
